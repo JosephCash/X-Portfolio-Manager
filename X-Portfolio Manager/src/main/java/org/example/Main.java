@@ -13,33 +13,25 @@ import java.awt.dnd.*;
 import java.awt.event.*;
 import java.io.File;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.example.PortfolioManager.*;
+
 public class Main extends JPanel {
 
-    // --- KOLORYSTYKA (Zdefiniowana lokalnie, aby uniknąć błędów) ---
-    private static final Color BG = new Color(18, 18, 18);
-    private static final Color CARD_BG = new Color(30, 30, 30);
-    private static final Color INPUT_BG = new Color(45, 45, 45); // <--- TUTAJ BYŁ BŁĄD, TERAZ JEST OK
-    private static final Color TEXT_MAIN = new Color(220, 220, 220);
-    private static final Color TEXT_DIM = new Color(150, 150, 150);
-    private static final Color BORDER = new Color(60, 60, 60);
-    private static final Color GREEN = new Color(39, 174, 96);
-    private static final Color RED = new Color(192, 57, 43);
-    private static final Color BLUE = new Color(41, 128, 185);
-    private static final Color SELECTION_BG = new Color(70, 70, 70);
-
-    private static final Font FONT_STD = new Font("Segoe UI", Font.PLAIN, 13);
-    private static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 13);
-    private static final Font FONT_ARROW = new Font("Segoe UI Symbol", Font.PLAIN, 10);
+    private static final String ARROW_RIGHT = "›";
+    private static final String ARROW_DOWN = "⌄";
 
     private JTable tabela;
     private DefaultTableModel modelTabeli;
     private JLabel labelSuma, labelStatus;
     private JButton przyciskOdswiez;
+    private JProgressBar pasekPostepu;
 
     private List<Aktywo> portfel;
     private String nazwaPortfela;
@@ -57,19 +49,19 @@ public class Main extends JPanel {
         this.currentGBP = MarketData.pobierzKursGBP();
 
         setLayout(new BorderLayout());
-        setBackground(BG);
+        setBackground(BG_COLOR);
         portfel = BazaDanych.wczytaj(nazwaPortfela);
 
         // --- NAGŁÓWEK ---
-        JPanel header = new JPanel(new BorderLayout()); header.setBackground(BG); header.setBorder(new EmptyBorder(15, 40, 15, 40));
+        JPanel header = new JPanel(new BorderLayout()); header.setBackground(BG_COLOR); header.setBorder(new EmptyBorder(15, 40, 15, 40));
         JPanel leftHead = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0)); leftHead.setOpaque(false);
         JButton btnBack = new JButton("← WRÓĆ"); styleMiniButton(btnBack); btnBack.addActionListener(e -> parentManager.wrocDoDashboard());
         JLabel title = new JLabel("  " + nazwaPortfela.toUpperCase()); title.setFont(new Font("Segoe UI", Font.BOLD, 24)); title.setForeground(TEXT_MAIN);
         leftHead.add(btnBack); leftHead.add(title);
 
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0)); toolbar.setBackground(BG);
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0)); toolbar.setBackground(BG_COLOR);
         JButton btnAdd = new JButton("DODAJ"); styleMinimalistButton(btnAdd); btnAdd.addActionListener(e -> pokazOknoDodawania());
-        JButton btnImp = new JButton("IMPORT XTB"); styleMinimalistButton(btnImp); btnImp.addActionListener(e -> pokazOknoImportu());
+        JButton btnImp = new JButton("IMPORT DANE"); styleMinimalistButton(btnImp); btnImp.addActionListener(e -> pokazOknoImportu());
         JButton btnDel = new JButton("USUŃ"); styleMinimalistButton(btnDel); btnDel.addActionListener(e -> usunZaznaczone());
         toolbar.add(btnAdd); toolbar.add(btnImp); toolbar.add(btnDel);
 
@@ -87,8 +79,8 @@ public class Main extends JPanel {
                 int r = tabela.rowAtPoint(e.getPoint());
                 if (r >= 0 && tabela.columnAtPoint(e.getPoint()) == 0) {
                     String val = (String) tabela.getValueAt(r, 0);
-                    if (val != null && (val.contains("▶") || val.contains("▼"))) {
-                        String sym = val.replace("▶", "").replace("▼", "").trim();
+                    if (val != null && (val.contains(ARROW_RIGHT) || val.contains(ARROW_DOWN))) {
+                        String sym = val.replace(ARROW_RIGHT, "").replace(ARROW_DOWN, "").trim();
                         if (rozwinieteGrupy.contains(sym)) rozwinieteGrupy.remove(sym); else rozwinieteGrupy.add(sym);
                         przeliczWidok();
                     }
@@ -100,7 +92,7 @@ public class Main extends JPanel {
                 int r = tabela.rowAtPoint(e.getPoint());
                 if(r>=0 && tabela.columnAtPoint(e.getPoint())==0) {
                     String v=(String)tabela.getValueAt(r,0);
-                    if(v!=null&&(v.contains("▶")||v.contains("▼"))) { tabela.setCursor(new Cursor(Cursor.HAND_CURSOR)); return; }
+                    if(v!=null&&(v.contains(ARROW_RIGHT)||v.contains(ARROW_DOWN))) { tabela.setCursor(new Cursor(Cursor.HAND_CURSOR)); return; }
                 }
                 tabela.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
             }
@@ -110,41 +102,91 @@ public class Main extends JPanel {
         PortfolioManager.styleScrollPane(scroll);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.setViewportBorder(null);
-        scroll.getViewport().setBackground(CARD_BG);
-        scroll.setBackground(CARD_BG);
 
-        JPanel corner = new JPanel(); corner.setBackground(BG);
+        // --- POPRAWKI TŁA ---
+        scroll.setBackground(BG_COLOR);              // Tło samego scrollpane
+        scroll.getViewport().setBackground(CARD_BG); // Tło obszaru z wierszami (ciemnoszare)
+
+        // !!! FIX DLA PRZESUWANIA KOLUMN !!!
+        // To jest kluczowe miejsce: ustalamy tło kontenera, w którym siedzą nagłówki.
+        // Dzięki temu "dziura" po przesuniętej kolumnie będzie miała kolor BG_COLOR.
+        if (scroll.getColumnHeader() != null) {
+            scroll.getColumnHeader().setBackground(BG_COLOR);
+            scroll.getColumnHeader().setOpaque(true);
+        }
+        // ----------------------------------
+
+        JPanel corner = new JPanel(); corner.setBackground(BG_COLOR);
         scroll.setCorner(ScrollPaneConstants.UPPER_RIGHT_CORNER, corner);
 
-        JPanel tableContainer = new JPanel(new BorderLayout()); tableContainer.setBackground(BG); tableContainer.setBorder(new EmptyBorder(0, 40, 0, 40));
+        JPanel tableContainer = new JPanel(new BorderLayout()); tableContainer.setBackground(BG_COLOR); tableContainer.setBorder(new EmptyBorder(0, 40, 0, 40));
         tableContainer.add(scroll, BorderLayout.CENTER);
         add(tableContainer, BorderLayout.CENTER);
 
         // --- STOPKA ---
-        JPanel footer = new JPanel(new BorderLayout()); footer.setBackground(CARD_BG); footer.setBorder(new EmptyBorder(15, 40, 15, 40));
-        labelStatus = new JLabel(" Gotowy."); labelStatus.setForeground(TEXT_DIM);
-        JPanel rightFoot = new JPanel(new FlowLayout(FlowLayout.RIGHT)); rightFoot.setOpaque(false);
-        labelSuma = new JLabel("0.00 PLN"); labelSuma.setFont(new Font("Segoe UI", Font.BOLD, 24)); labelSuma.setForeground(GREEN);
-        przyciskOdswiez = new JButton("ODŚWIEŻ CENY"); PortfolioManager.styleButton(przyciskOdswiez, GREEN); przyciskOdswiez.addActionListener(e -> odswiezCeny());
-        rightFoot.add(labelSuma); rightFoot.add(Box.createHorizontalStrut(20)); rightFoot.add(przyciskOdswiez);
-        footer.add(labelStatus, BorderLayout.WEST); footer.add(rightFoot, BorderLayout.EAST);
+        JPanel footer = new JPanel(new BorderLayout()); footer.setBackground(CARD_BG);
+        footer.setBorder(new EmptyBorder(20, 40, 20, 40));
+        footer.setPreferredSize(new Dimension(0, 100));
+
+        JPanel leftFoot = new JPanel(new GridLayout(2, 1, 0, 5)); leftFoot.setOpaque(false);
+        labelStatus = new JLabel(" Gotowy."); labelStatus.setForeground(TEXT_DIM); labelStatus.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+
+        pasekPostepu = new JProgressBar();
+        pasekPostepu.setIndeterminate(true);
+        pasekPostepu.setPreferredSize(new Dimension(150, 4));
+        pasekPostepu.setBackground(CARD_BG); pasekPostepu.setForeground(ACCENT);
+        pasekPostepu.setBorderPainted(false);
+        pasekPostepu.setVisible(false);
+
+        pasekPostepu.setUI(new BasicProgressBarUI() {
+            @Override protected void paintIndeterminate(Graphics g, JComponent c) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setColor(c.getBackground()); g2.fillRect(0,0,c.getWidth(),c.getHeight());
+                super.paintIndeterminate(g2, c);
+                g2.dispose();
+            }
+        });
+
+        leftFoot.add(labelStatus);
+        leftFoot.add(pasekPostepu);
+
+        JPanel rightFoot = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)); rightFoot.setOpaque(false);
+        labelSuma = new JLabel("0.00 PLN"); labelSuma.setFont(new Font("Segoe UI", Font.BOLD, 24)); labelSuma.setForeground(ACCENT);
+        przyciskOdswiez = new JButton("ODŚWIEŻ CENY"); PortfolioManager.styleButton(przyciskOdswiez, ACCENT); przyciskOdswiez.addActionListener(e -> odswiezCeny());
+
+        rightFoot.add(labelSuma);
+        rightFoot.add(Box.createHorizontalStrut(20));
+        rightFoot.add(przyciskOdswiez);
+
+        footer.add(leftFoot, BorderLayout.WEST); footer.add(rightFoot, BorderLayout.EAST);
         add(footer, BorderLayout.SOUTH);
 
         przeliczWidok();
-        if (!MarketData.czyDaneZCache()) odswiezCeny(); else labelStatus.setText(" Dane załadowane z pamięci podręcznej.");
+        if (!MarketData.czyDaneZCache()) odswiezCeny();
+        else labelStatus.setText(" Ostatnia aktualizacja: " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
     }
 
     private void odswiezCeny() {
-        przyciskOdswiez.setEnabled(false); przyciskOdswiez.setBackground(BORDER); labelStatus.setText(" Pobieranie aktualnych cen...");
+        przyciskOdswiez.setEnabled(false); przyciskOdswiez.setBackground(BORDER_COLOR);
+        labelStatus.setText(" Pobieranie aktualnych cen...");
+        pasekPostepu.setVisible(true);
+
         new SwingWorker<Void, Void>() {
             double u, e, g;
             @Override protected Void doInBackground() {
                 u = MarketData.pobierzKursUSD(); e = MarketData.pobierzKursEUR(); g = MarketData.pobierzKursGBP();
                 if(u==0) u=currentUSD; if(e==0) e=currentEUR; if(g==0) g=currentGBP;
-                for(Aktywo a : portfel) { if(a instanceof AktywoRynkowe) { a.getCenaJednostkowa(); try{Thread.sleep(150);}catch(Exception x){} } }
+                for(Aktywo a : portfel) { if(a instanceof AktywoRynkowe) { a.getCenaJednostkowa(); try{Thread.sleep(50);}catch(Exception x){} } }
                 return null;
             }
-            @Override protected void done() { currentUSD=u; currentEUR=e; currentGBP=g; przeliczWidok(); labelStatus.setText(" Zaktualizowano kursy i ceny."); przyciskOdswiez.setEnabled(true); przyciskOdswiez.setBackground(GREEN); }
+            @Override protected void done() {
+                currentUSD=u; currentEUR=e; currentGBP=g;
+                przeliczWidok();
+                String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+                labelStatus.setText(" Ostatnia aktualizacja: " + time);
+                przyciskOdswiez.setEnabled(true); przyciskOdswiez.setBackground(ACCENT);
+                pasekPostepu.setVisible(false);
+            }
         }.execute();
     }
 
@@ -160,7 +202,8 @@ public class Main extends JPanel {
             } else {
                 double ilosc = 0, wartosc = 0, koszt = 0;
                 for (Aktywo a : lista) { double w = a.getWartoscPLN(currentUSD, currentEUR, currentGBP); ilosc += a.ilosc; wartosc += w; sumaTotal += w; if(a instanceof AktywoRynkowe) koszt += (((AktywoRynkowe)a).cenaZakupu * a.ilosc); }
-                double srCena = ilosc>0 ? koszt/ilosc : 0; double cenaRynk = lista.get(0).getCenaJednostkowa(); String pre = rozwinieteGrupy.contains(sym) ? "▼ " : "▶ ";
+                double srCena = ilosc>0 ? koszt/ilosc : 0; double cenaRynk = lista.get(0).getCenaJednostkowa();
+                String pre = rozwinieteGrupy.contains(sym) ? ARROW_DOWN + " " : ARROW_RIGHT + " ";
                 modelTabeli.addRow(new Object[]{ pre + sym, lista.get(0).typ, lista.size()+" poz.", String.format("%.4f", ilosc), srCena>0?String.format("Śr: %.2f", srCena):"-", String.format("%.2f", cenaRynk), String.format("%,.2f zł", wartosc) });
                 mapaWierszyDoAktywow.put(r++, null);
                 if (rozwinieteGrupy.contains(sym)) for(Aktywo a : lista) dodajWiersz(a, r++, true);
@@ -180,162 +223,237 @@ public class Main extends JPanel {
     private void usunZaznaczone() {
         int[] rows = tabela.getSelectedRows(); if(rows.length==0) return;
         Set<Aktywo> del = new HashSet<>();
-        for(int r : rows) { Aktywo a = mapaWierszyDoAktywow.get(r); if(a!=null) del.add(a); else { String s = (String)tabela.getValueAt(r,0); if(s!=null) { String sym = s.replace("▶","").replace("▼","").trim(); for(Aktywo x:portfel) if(x.symbol.equals(sym)) del.add(x); } } }
+        for(int r : rows) { Aktywo a = mapaWierszyDoAktywow.get(r); if(a!=null) del.add(a); else { String s = (String)tabela.getValueAt(r,0); if(s!=null) { String sym = s.replace(ARROW_RIGHT,"").replace(ARROW_DOWN,"").trim(); for(Aktywo x:portfel) if(x.symbol.equals(sym)) del.add(x); } } }
         if(del.isEmpty()) return;
         int c = JOptionPane.showConfirmDialog(this, "Usunąć "+del.size()+" poz.?", "Usuwanie", JOptionPane.YES_NO_OPTION);
         if(c==JOptionPane.YES_OPTION) { portfel.removeAll(del); BazaDanych.zapisz(portfel, nazwaPortfela); przeliczWidok(); }
     }
 
-    // --- DARK MODE DIALOGS (Dodawanie i Import) ---
-
-    // IMPORT
+    // --- IMPORT DANYCH ---
     private void pokazOknoImportu() {
-        Window parent = SwingUtilities.getWindowAncestor(this); JDialog d = new JDialog(parent, "Import", Dialog.ModalityType.APPLICATION_MODAL);
-        d.setUndecorated(true); d.setSize(500, 400); d.setLocationRelativeTo(parent);
-        JPanel root = new JPanel(new BorderLayout()); root.setBorder(BorderFactory.createLineBorder(BORDER, 1)); root.setBackground(CARD_BG); d.setContentPane(root);
+        Window parent = SwingUtilities.getWindowAncestor(this); JDialog d = new JDialog(parent, "Import Danych", Dialog.ModalityType.APPLICATION_MODAL);
+        d.setUndecorated(true); d.setSize(500, 420); d.setLocationRelativeTo(parent);
+        JPanel root = new JPanel(new BorderLayout()); root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1)); root.setBackground(CARD_BG); d.setContentPane(root);
 
-        // Header
-        JPanel head = new JPanel(new BorderLayout()); head.setBackground(CARD_BG); head.setBorder(new EmptyBorder(10,15,10,15));
-        JLabel title = new JLabel("Import XTB"); title.setForeground(TEXT_MAIN); title.setFont(FONT_BOLD);
-        JButton close = new JButton("X"); styleMiniButton(close); close.addActionListener(e->d.dispose());
+        JPanel head = new JPanel(new BorderLayout()); head.setBackground(CARD_BG); head.setBorder(new EmptyBorder(15,20,15,20));
+        JLabel title = new JLabel("Import Danych"); title.setForeground(TEXT_MAIN); title.setFont(PortfolioManager.FONT_TITLE.deriveFont(20f));
+        JButton close = new JButton("X"); PortfolioManager.styleMiniActionBtn(close, TEXT_DIM); close.addActionListener(e->d.dispose());
         head.add(title, BorderLayout.WEST); head.add(close, BorderLayout.EAST); root.add(head, BorderLayout.NORTH);
 
-        // Content
-        JPanel center = new JPanel(new GridBagLayout()); center.setBackground(INPUT_BG);
-        center.setBorder(BorderFactory.createCompoundBorder(new EmptyBorder(20,20,20,20), BorderFactory.createDashedBorder(TEXT_DIM, 2, 5, 5, true)));
-        JLabel info = new JLabel("<html><center>Upuść pliki CSV / XLSX tutaj<br><br><small style='color:#999'>OPEN POSITION lub CASH OPERATION</small></center></html>");
-        info.setForeground(TEXT_MAIN); info.setHorizontalAlignment(SwingConstants.CENTER); center.add(info);
+        JPanel content = new JPanel(); content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS)); content.setBackground(CARD_BG); content.setBorder(new EmptyBorder(10, 30, 20, 30));
 
-        center.setDropTarget(new DropTarget() {
+        JLabel lSource = new JLabel("Źródło danych:"); lSource.setForeground(TEXT_DIM); lSource.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JComboBox<String> comboSource = new JComboBox<>(new String[]{"XTB (Excel/CSV)", "Inne (wkrótce)"}); PortfolioManager.stylizujComboBox(comboSource);
+
+        JPanel dropZone = new JPanel(new GridBagLayout()); dropZone.setBackground(INPUT_BG);
+        dropZone.setBorder(BorderFactory.createCompoundBorder(new EmptyBorder(10,30,10,30), BorderFactory.createDashedBorder(TEXT_DIM, 2, 5, 5, true)));
+        dropZone.setPreferredSize(new Dimension(400, 150)); dropZone.setMaximumSize(new Dimension(Integer.MAX_VALUE, 150));
+        JLabel info = new JLabel("<html><center>Upuść pliki tutaj<br><small style='color:#888'>.xlsx, .csv</small></center></html>");
+        info.setForeground(TEXT_MAIN); info.setHorizontalAlignment(SwingConstants.CENTER); dropZone.add(info);
+
+        dropZone.setDropTarget(new DropTarget() {
             public synchronized void drop(DropTargetDropEvent evt) { try { evt.acceptDrop(DnDConstants.ACTION_COPY); List<File> f = (List<File>) evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor); procesujPliki(f, d); } catch (Exception e) {} }
         });
 
-        JButton btnSelect = new JButton("WYBIERZ Z DYSKU"); PortfolioManager.styleButton(btnSelect, BLUE);
+        JButton btnSelect = new JButton("WYBIERZ PLIK"); PortfolioManager.styleButton(btnSelect, PortfolioManager.ACCENT); btnSelect.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnSelect.addActionListener(e -> {
-            JFileChooser fc = new JFileChooser(); fc.setMultiSelectionEnabled(true); fc.setFileFilter(new FileNameExtensionFilter("XTB Reports", "xlsx", "xls", "csv"));
+            JFileChooser fc = new JFileChooser(); fc.setMultiSelectionEnabled(true); fc.setFileFilter(new FileNameExtensionFilter("Arkusze XTB", "xlsx", "xls", "csv"));
             if (fc.showOpenDialog(d) == JFileChooser.APPROVE_OPTION) procesujPliki(Arrays.asList(fc.getSelectedFiles()), d);
         });
 
-        JPanel wrap = new JPanel(new BorderLayout(0, 20)); wrap.setBackground(CARD_BG); wrap.setBorder(new EmptyBorder(20,20,20,20));
-        wrap.add(center, BorderLayout.CENTER); wrap.add(btnSelect, BorderLayout.SOUTH); root.add(wrap, BorderLayout.CENTER); d.setVisible(true);
+        content.add(lSource); content.add(Box.createVerticalStrut(5)); content.add(comboSource); content.add(Box.createVerticalStrut(20));
+        content.add(dropZone); content.add(Box.createVerticalStrut(20)); content.add(btnSelect);
+
+        root.add(content, BorderLayout.CENTER); d.setVisible(true);
     }
 
     private void procesujPliki(List<File> pliki, JDialog d) {
         XtbImport.ImportResult res = XtbImport.importujPliki(pliki);
         if (res.znalezionePliki > 0 && !res.aktywa.isEmpty()) { portfel.addAll(res.aktywa); BazaDanych.zapisz(portfel, nazwaPortfela); przeliczWidok(); JOptionPane.showMessageDialog(d, "Zaimportowano "+res.aktywa.size()+" pozycji."); d.dispose(); }
-        else JOptionPane.showMessageDialog(d, "Brak danych w plikach.");
+        else JOptionPane.showMessageDialog(d, "Nie udało się zaimportować danych.\nUpewnij się, że plik zawiera arkusz OPEN POSITION.");
     }
 
-    // DODAWANIE
+    // --- OKNO DODAWANIA ---
     private void pokazOknoDodawania() {
         Window parent = SwingUtilities.getWindowAncestor(this); JDialog d = new JDialog(parent, "Nowa Pozycja", Dialog.ModalityType.APPLICATION_MODAL);
-        d.setUndecorated(true); d.setSize(450, 700); d.setLocationRelativeTo(parent);
-        JPanel root = new JPanel(new BorderLayout()); root.setBorder(BorderFactory.createLineBorder(BORDER, 1)); root.setBackground(CARD_BG); d.setContentPane(root);
+        d.setUndecorated(true); d.setSize(420, 650); d.setLocationRelativeTo(parent);
+        JPanel root = new JPanel(new BorderLayout()); root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1)); root.setBackground(CARD_BG); d.setContentPane(root);
 
         // Header
-        JPanel head = new JPanel(new BorderLayout()); head.setBackground(CARD_BG); head.setBorder(new EmptyBorder(10,15,10,15));
-        JLabel title = new JLabel("Dodaj Pozycję"); title.setForeground(TEXT_MAIN); title.setFont(FONT_BOLD);
-        JButton close = new JButton("X"); styleMiniButton(close); close.addActionListener(e->d.dispose());
+        JPanel head = new JPanel(new BorderLayout()); head.setBackground(CARD_BG); head.setBorder(new EmptyBorder(15,20,15,20));
+        JLabel title = new JLabel("Dodaj Pozycję"); title.setForeground(TEXT_MAIN); title.setFont(PortfolioManager.FONT_TITLE.deriveFont(20f));
+        JButton close = new JButton("X"); PortfolioManager.styleMiniActionBtn(close, TEXT_DIM); close.addActionListener(e->d.dispose());
         head.add(title, BorderLayout.WEST); head.add(close, BorderLayout.EAST); root.add(head, BorderLayout.NORTH);
 
-        // Form
-        JPanel form = new JPanel(); form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS)); form.setBackground(CARD_BG); form.setBorder(new EmptyBorder(20,20,20,20));
+        // Content
+        JPanel form = new JPanel(); form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS)); form.setBackground(CARD_BG); form.setBorder(new EmptyBorder(0, 30, 20, 30));
 
-        JComboBox<String> cat = new JComboBox<>(new String[]{"AKCJA", "KRYPTOWALUTA", "OBLIGACJA"}); stylizujComboBox(cat);
-        JComboBox<String> sub = new JComboBox<>(); stylizujComboBox(sub);
-        JTextField sym = stylizujInput(new JTextField()); JTextField qty = stylizujInput(new JTextField());
-        JSpinner date = new JSpinner(new SpinnerDateModel()); date.setEditor(new JSpinner.DateEditor(date, "dd.MM.yyyy")); stylizujSpinner(date); date.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        JTextField price = stylizujInput(new JTextField("0.0")); JComboBox<Waluta> curr = new JComboBox<>(Waluta.values()); stylizujComboBox(curr);
-        JTextField suffix = stylizujInput(new JTextField(".")); JTextField opr1 = stylizujInput(new JTextField("0.0")); JTextField opr2 = stylizujInput(new JTextField("0.0"));
+        JPanel catPanel = new JPanel(new GridLayout(1, 3, 10, 0)); catPanel.setOpaque(false);
+        catPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
 
-        JPanel pPrice = createFieldPanel("Cena zakupu (1 szt):", price);
-        JPanel pCurr = createFieldPanel("Waluta:", curr);
-        JPanel pSuffix = createFieldPanel("Suffix (np. .DE):", suffix); pSuffix.setVisible(false);
-        JPanel pBond = new JPanel(new GridLayout(4,1,5,5)); pBond.setBackground(CARD_BG); pBond.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(BORDER), "Obligacja", 0,0, FONT_BOLD, TEXT_MAIN));
-        pBond.add(createLabel("Oproc. 1 rok:")); pBond.add(opr1); pBond.add(createLabel("Marża:")); pBond.add(opr2); pBond.setVisible(false);
+        // --- PRZYCISKI ZMIENIAJĄCE IKONY ---
+        JToggleButton bAkcja = createTileBtn("Akcja", "stock.png");
+        JToggleButton bKrypto = createTileBtn("Krypto", "crypto.png");
+        JToggleButton bOblig = createTileBtn("Obligacja", "bond.png");
+        ButtonGroup bgCat = new ButtonGroup(); bgCat.add(bAkcja); bgCat.add(bKrypto); bgCat.add(bOblig);
+        catPanel.add(bAkcja); catPanel.add(bKrypto); catPanel.add(bOblig);
+        bAkcja.setSelected(true);
 
-        Runnable logic = () -> {
-            String c = (String)cat.getSelectedItem(); sub.removeAllItems();
-            if("AKCJA".equals(c)) { sub.addItem("GPW (PL)"); sub.addItem("USA"); sub.addItem("UK"); sub.addItem("DE"); sub.addItem("Inny"); pBond.setVisible(false); pPrice.setVisible(true); pCurr.setVisible(true); sub.setEnabled(true); }
-            else if("KRYPTOWALUTA".equals(c)) { sub.addItem("Global"); sub.setEnabled(false); pBond.setVisible(false); pPrice.setVisible(true); pCurr.setVisible(false); }
-            else { sub.addItem("Stała"); sub.addItem("Indeksowana"); sub.setEnabled(true); pBond.setVisible(true); pPrice.setVisible(false); pCurr.setVisible(false); }
-            pSuffix.setVisible(false); d.revalidate(); d.repaint();
+        // Pola
+        JComboBox<String> sub = new JComboBox<>(); PortfolioManager.stylizujComboBox(sub);
+        JTextField sym = new JTextField(); PortfolioManager.stylizujInput(sym);
+        JTextField qty = new JTextField(); PortfolioManager.stylizujInput(qty);
+        JSpinner date = new JSpinner(new SpinnerDateModel()); PortfolioManager.stylizujSpinner(date);
+        JTextField price = new JTextField(); PortfolioManager.stylizujInput(price);
+        JComboBox<Waluta> curr = new JComboBox<>(Waluta.values()); PortfolioManager.stylizujComboBox(curr);
+
+        JTextField opr1 = new JTextField(); PortfolioManager.stylizujInput(opr1);
+        JTextField opr2 = new JTextField(); PortfolioManager.stylizujInput(opr2);
+        JPanel pOblig = new JPanel(new GridLayout(2, 2, 10, 10)); pOblig.setOpaque(false);
+        pOblig.add(createLabel("Oproc. 1 rok:")); pOblig.add(opr1); pOblig.add(createLabel("Marża:")); pOblig.add(opr2);
+        pOblig.setVisible(false);
+
+        ActionListener updateLogic = e -> {
+            sub.removeAllItems(); pOblig.setVisible(false); curr.setEnabled(true); price.setEnabled(true);
+            if(bAkcja.isSelected()) {
+                sub.addItem("GPW (Polska)"); sub.addItem("USA (Nasdaq/NYSE)"); sub.addItem("Wielka Brytania"); sub.addItem("Niemcy"); sub.addItem("Inny");
+                price.setVisible(true); curr.setVisible(true);
+            } else if(bKrypto.isSelected()) {
+                sub.addItem("Global"); price.setVisible(true); curr.setSelectedItem(Waluta.USDT); curr.setEnabled(false);
+            } else {
+                sub.addItem("Skarbowa Stała"); sub.addItem("Skarbowa Indeksowana");
+                price.setVisible(false); curr.setVisible(false); pOblig.setVisible(true);
+            }
+            d.revalidate(); d.repaint();
         };
-        logic.run();
-        cat.addActionListener(e->logic.run());
-        sub.addActionListener(e->{ String s=(String)sub.getSelectedItem(); pSuffix.setVisible(s!=null && s.contains("Inny")); });
+        bAkcja.addActionListener(updateLogic); bKrypto.addActionListener(updateLogic); bOblig.addActionListener(updateLogic);
+        updateLogic.actionPerformed(null);
 
-        form.add(createLabel("Kategoria:")); form.add(cat); form.add(Box.createVerticalStrut(10));
-        form.add(createLabel("Typ:")); form.add(sub); form.add(Box.createVerticalStrut(10));
-        form.add(pSuffix);
-        form.add(createLabel("Symbol (np. CDR, AAPL, BTC):")); form.add(sym); form.add(Box.createVerticalStrut(10));
-        form.add(createLabel("Ilość:")); form.add(qty); form.add(Box.createVerticalStrut(10));
-        form.add(pPrice); form.add(Box.createVerticalStrut(10));
-        form.add(createLabel("Data zakupu:")); form.add(date); form.add(Box.createVerticalStrut(10));
-        form.add(pCurr); form.add(pBond); form.add(Box.createVerticalStrut(20));
+        form.add(createLabel("Kategoria:")); form.add(Box.createVerticalStrut(5)); form.add(catPanel); form.add(Box.createVerticalStrut(15));
+        form.add(createLabel("Rynek / Typ:")); form.add(Box.createVerticalStrut(5)); form.add(sub); form.add(Box.createVerticalStrut(10));
+        form.add(createLabel("Symbol (np. CDR, AAPL, BTC):")); form.add(Box.createVerticalStrut(5)); form.add(sym); form.add(Box.createVerticalStrut(10));
 
-        JButton save = new JButton("ZAPISZ POZYCJĘ"); PortfolioManager.styleButton(save, BLUE); save.setAlignmentX(Component.CENTER_ALIGNMENT);
-        save.addActionListener(e -> {
+        JPanel rowQtyPrice = new JPanel(new GridLayout(1, 2, 10, 0)); rowQtyPrice.setOpaque(false);
+        rowQtyPrice.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
+        JPanel pQ = new JPanel(new BorderLayout()); pQ.setOpaque(false); pQ.add(createLabel("Ilość:"), BorderLayout.NORTH); pQ.add(qty, BorderLayout.CENTER);
+        JPanel pP = new JPanel(new BorderLayout()); pP.setOpaque(false); pP.add(createLabel("Cena (1 szt):"), BorderLayout.NORTH); pP.add(price, BorderLayout.CENTER);
+        rowQtyPrice.add(pQ); rowQtyPrice.add(pP);
+        form.add(rowQtyPrice); form.add(Box.createVerticalStrut(10));
+
+        form.add(createLabel("Data zakupu:")); form.add(Box.createVerticalStrut(5)); form.add(date); form.add(Box.createVerticalStrut(10));
+        form.add(createLabel("Waluta:")); form.add(Box.createVerticalStrut(5)); form.add(curr); form.add(Box.createVerticalStrut(10));
+        form.add(pOblig); form.add(Box.createVerticalGlue());
+
+        JButton btnSave = new JButton("DODAJ POZYCJĘ"); PortfolioManager.styleButton(btnSave, ACCENT); btnSave.setAlignmentX(Component.CENTER_ALIGNMENT);
+        btnSave.addActionListener(ev -> {
             try {
-                String k = (String)cat.getSelectedItem(); String sType = (String)sub.getSelectedItem();
                 String s = sym.getText().trim().toUpperCase(); double q = Double.parseDouble(qty.getText().replace(",","."));
                 LocalDate ld = ((Date)date.getValue()).toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-                double p = 0; try{p=Double.parseDouble(price.getText().replace(",","."));}catch(Exception x){}
-
                 Aktywo newAsset = null;
-                if("KRYPTOWALUTA".equals(k)) newAsset = new AktywoRynkowe(s, TypAktywa.KRYPTO, q, ld.toString(), Waluta.USDT, p);
-                else if("AKCJA".equals(k)) {
-                    if(sType.contains("GPW") && !s.endsWith(".WA")) s+=".WA";
-                    if(sType.contains("USA") && !s.endsWith(".US")) s+=".US";
-                    if(sType.contains("UK") && !s.endsWith(".UK")) s+=".UK";
-                    if(sType.contains("DE") && !s.endsWith(".DE")) s+=".DE";
-                    if(sType.contains("Inny")) { String sf = suffix.getText().trim().toUpperCase(); if(!sf.startsWith(".")) sf="."+sf; if(!s.endsWith(sf)) s+=sf; }
-                    newAsset = new AktywoRynkowe(s, TypAktywa.AKCJA_USA, q, ld.toString(), (Waluta)curr.getSelectedItem(), p);
+
+                if(bKrypto.isSelected()) {
+                    double p = Double.parseDouble(price.getText().replace(",","."));
+                    newAsset = new AktywoRynkowe(s, TypAktywa.KRYPTO, q, ld.toString(), Waluta.USDT, p);
+                } else if(bAkcja.isSelected()) {
+                    double p = Double.parseDouble(price.getText().replace(",","."));
+                    String t = (String)sub.getSelectedItem();
+                    if(t.contains("GPW") && !s.contains(".")) s+=".WA";
+                    else if(t.contains("USA") && s.contains(".")) s=s.split("\\.")[0];
+                    else if(t.contains("Wielka Brytania") && !s.endsWith(".UK")) s+=".UK";
+                    else if(t.contains("Niemcy") && !s.endsWith(".DE")) s+=".DE";
+                    newAsset = new AktywoRynkowe(s, t.contains("GPW")?TypAktywa.AKCJA_PL:TypAktywa.AKCJA_USA, q, ld.toString(), (Waluta)curr.getSelectedItem(), p);
                 } else {
                     double o1 = Double.parseDouble(opr1.getText().replace(",","."));
-                    if(sType.contains("Stała")) newAsset = new ObligacjaStala(s, q, ld.toString(), o1);
+                    if(sub.getSelectedItem().toString().contains("Stała")) newAsset = new ObligacjaStala(s, q, ld.toString(), o1);
                     else newAsset = new ObligacjaIndeksowana(s, q, ld.toString(), o1, Double.parseDouble(opr2.getText().replace(",",".") ));
                 }
-
-                if(newAsset != null) { portfel.add(newAsset); BazaDanych.zapisz(portfel, nazwaPortfela); przeliczWidok(); d.dispose(); }
+                if(newAsset!=null) { portfel.add(newAsset); BazaDanych.zapisz(portfel, nazwaPortfela); przeliczWidok(); d.dispose(); }
             } catch(Exception ex) { JOptionPane.showMessageDialog(d, "Błąd danych: " + ex.getMessage()); }
         });
 
-        form.add(save);
-        JScrollPane sp = new JScrollPane(form); PortfolioManager.styleScrollPane(sp); sp.getViewport().setBackground(CARD_BG); root.add(sp, BorderLayout.CENTER);
-        d.setVisible(true);
+        JPanel footer = new JPanel(); footer.setBackground(CARD_BG); footer.setBorder(new EmptyBorder(0,0,20,0)); footer.add(btnSave);
+        root.add(form, BorderLayout.CENTER); root.add(footer, BorderLayout.SOUTH); d.setVisible(true);
     }
 
-    private JPanel createFieldPanel(String label, JComponent field) {
-        JPanel p = new JPanel(new GridLayout(2,1)); p.setBackground(CARD_BG);
-        JLabel l = new JLabel(label); l.setForeground(TEXT_MAIN); l.setFont(FONT_STD);
-        p.add(l); p.add(field); return p;
+    // --- UTILS & STYLE ---
+    private JLabel createLabel(String t) { JLabel l = new JLabel(t); l.setForeground(TEXT_DIM); l.setAlignmentX(Component.CENTER_ALIGNMENT); return l; }
+
+    // --- OBSŁUGA BIAŁYCH IKON PRZY ZAZNACZENIU ---
+    private JToggleButton createTileBtn(String txt, String iconName) {
+        ImageIcon iconNormal = PortfolioManager.loadIcon(iconName, 32);
+        ImageIcon iconWhite = PortfolioManager.loadIcon(iconName.replace(".png", "_w.png"), 32);
+
+        JToggleButton b = new JToggleButton("<html><center>"+txt+"</center></html>", iconNormal);
+        b.setVerticalTextPosition(SwingConstants.BOTTOM);
+        b.setHorizontalTextPosition(SwingConstants.CENTER);
+
+        b.setBackground(INPUT_BG);
+        b.setForeground(TEXT_DIM);
+        b.setFocusPainted(false);
+        b.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
+        b.setContentAreaFilled(false);
+        b.setOpaque(true);
+        b.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        b.addChangeListener(e -> {
+            if(b.isSelected()) {
+                b.setBackground(ACCENT);
+                b.setForeground(Color.WHITE);
+                b.setIcon(iconWhite);
+            } else {
+                b.setBackground(INPUT_BG);
+                b.setForeground(TEXT_DIM);
+                b.setIcon(iconNormal);
+            }
+        });
+        return b;
     }
 
-    // --- STYLE ---
-    private JLabel createLabel(String t) { JLabel l = new JLabel(t); l.setForeground(TEXT_MAIN); l.setFont(FONT_STD); l.setAlignmentX(Component.LEFT_ALIGNMENT); return l; }
-    private JTextField stylizujInput(JTextField tf) { tf.setOpaque(true); tf.setBackground(INPUT_BG); tf.setForeground(TEXT_MAIN); tf.setCaretColor(TEXT_MAIN); tf.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER, 1), BorderFactory.createEmptyBorder(4, 7, 4, 7))); tf.setFont(FONT_STD); tf.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35)); return tf; }
-    private void styleMinimalistButton(JButton b) { b.setUI(new BasicButtonUI()); b.setBackground(INPUT_BG); b.setForeground(TEXT_MAIN); b.setFocusPainted(false); b.setBorderPainted(false); b.setFont(new Font("Segoe UI", Font.BOLD, 12)); b.setBorder(new EmptyBorder(8, 15, 8, 15)); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setBackground(new Color(60, 60, 60)); } public void mouseExited(MouseEvent e) { b.setBackground(INPUT_BG); } }); }
-    private void styleMiniButton(JButton b) { b.setUI(new BasicButtonUI()); b.setBackground(BG); b.setForeground(TEXT_DIM); b.setBorder(null); b.setFocusPainted(false); b.setFont(new Font("Segoe UI", Font.BOLD, 14)); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setForeground(Color.WHITE); } public void mouseExited(MouseEvent e) { b.setForeground(TEXT_DIM); } }); }
-    private void stylizujComboBox(JComboBox<?> combo) { combo.setFont(FONT_STD); combo.setBackground(INPUT_BG); combo.setForeground(TEXT_MAIN); combo.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER, 1), BorderFactory.createEmptyBorder(5, 7, 5, 7))); combo.setOpaque(true); combo.setFocusable(false); combo.setRenderer(new DefaultListCellRenderer() { @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) { JLabel c = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus); c.setOpaque(true); c.setBorder(new EmptyBorder(6, 8, 6, 8)); boolean disabled = !combo.isEnabled(); if (isSelected && !disabled) c.setBackground(SELECTION_BG); else c.setBackground(INPUT_BG); if (disabled) c.setForeground(TEXT_DIM); else c.setForeground(isSelected ? Color.WHITE : TEXT_MAIN); return c; } }); combo.setUI(new BasicComboBoxUI() { @Override protected JButton createArrowButton() { JButton btn = new JButton("▼"); btn.setBackground(INPUT_BG); btn.setBorder(BorderFactory.createEmptyBorder()); return btn; } @Override public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) { g.setColor(INPUT_BG); g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height); } }); combo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35)); }
-    private void stylizujSpinner(JSpinner spinner) { spinner.setFont(FONT_STD); spinner.setBackground(INPUT_BG); spinner.setForeground(TEXT_MAIN); spinner.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER, 1), BorderFactory.createEmptyBorder(2, 2, 2, 2))); JComponent editor = spinner.getEditor(); if (editor instanceof JSpinner.DefaultEditor) { JFormattedTextField tf = ((JSpinner.DefaultEditor) editor).getTextField(); tf.setBackground(INPUT_BG); tf.setForeground(TEXT_MAIN); tf.setCaretColor(TEXT_MAIN); tf.setSelectionColor(SELECTION_BG); tf.setHorizontalAlignment(JTextField.LEFT); } spinner.setUI(new BasicSpinnerUI() { @Override protected Component createNextButton() { return createFlatArrowButton("▲"); } @Override protected Component createPreviousButton() { return createFlatArrowButton("▼"); } private JButton createFlatArrowButton(String symbol) { JButton btn = new JButton(symbol); btn.setFont(FONT_ARROW); btn.setMargin(new Insets(0, 0, 0, 0)); btn.setBackground(INPUT_BG); btn.setForeground(TEXT_DIM); btn.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5)); btn.setFocusable(false); btn.setOpaque(true); btn.setContentAreaFilled(true); btn.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { btn.setBackground(BORDER); btn.setForeground(Color.WHITE); } public void mouseExited(MouseEvent e) { btn.setBackground(INPUT_BG); btn.setForeground(TEXT_DIM); } }); return btn; } }); }
+    private void styleMinimalistButton(JButton b) {
+        b.setUI(new BasicButtonUI()); b.setBackground(BG_COLOR); b.setForeground(TEXT_MAIN); b.setFocusPainted(false); b.setBorderPainted(false);
+        b.setFont(new Font("Segoe UI", Font.BOLD, 12)); b.setBorder(new EmptyBorder(8, 15, 8, 15));
+        b.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setBackground(new Color(40,40,40)); } public void mouseExited(MouseEvent e) { b.setBackground(BG_COLOR); } });
+    }
+    private void styleMiniButton(JButton b) { b.setUI(new BasicButtonUI()); b.setBackground(BG_COLOR); b.setForeground(TEXT_DIM); b.setBorder(null); b.setFocusPainted(false); b.setFont(new Font("Segoe UI", Font.BOLD, 14)); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setForeground(Color.WHITE); } public void mouseExited(MouseEvent e) { b.setForeground(TEXT_DIM); } }); }
 
-    // --- FIX BIAŁEGO NAGŁÓWKA ---
     private void stylizujTabele() {
-        tabela.setBackground(CARD_BG); tabela.setForeground(TEXT_MAIN); tabela.setRowHeight(35); tabela.setFont(new Font("Segoe UI", Font.PLAIN, 13)); tabela.setShowVerticalLines(false); tabela.setGridColor(BORDER); tabela.setSelectionBackground(new Color(70, 70, 70)); tabela.setSelectionForeground(Color.WHITE);
+        tabela.setBackground(CARD_BG); tabela.setForeground(TEXT_MAIN); tabela.setRowHeight(35); tabela.setFont(new Font("Segoe UI", Font.PLAIN, 13)); tabela.setShowVerticalLines(false); tabela.setGridColor(BORDER_COLOR); tabela.setSelectionBackground(new Color(70, 70, 70)); tabela.setSelectionForeground(Color.WHITE);
+
+        tabela.setFillsViewportHeight(true);
+
         JTableHeader h = tabela.getTableHeader();
-        h.setBackground(BG); h.setForeground(TEXT_DIM); h.setBorder(BorderFactory.createMatteBorder(0,0,1,0,BORDER)); h.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        h.setBackground(BG_COLOR);
+        h.setOpaque(true); // Przywrócone na true, bo kolor tła jest teraz wymuszony w kontenerze
+        h.setForeground(TEXT_DIM); h.setBorder(BorderFactory.createMatteBorder(0,0,1,0,BORDER_COLOR)); h.setFont(new Font("Segoe UI", Font.BOLD, 12));
 
         h.setDefaultRenderer(new DefaultTableCellRenderer() {
             @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                l.setBackground(BG); // FIX: Wymuszenie tła
-                l.setForeground(TEXT_DIM); l.setFont(new Font("Segoe UI", Font.BOLD, 12));
-                l.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0,0,1,0,BORDER), new EmptyBorder(0,10,0,0)));
+                l.setBackground(BG_COLOR); l.setForeground(TEXT_DIM); l.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                l.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0,0,1,0,BORDER_COLOR), new EmptyBorder(0,10,0,0)));
                 return l;
             }
         });
 
-        tabela.setDefaultRenderer(Object.class, new DefaultTableCellRenderer(){ public Component getTableCellRendererComponent(JTable t, Object v, boolean isSel, boolean foc, int r, int c) { Component comp = super.getTableCellRendererComponent(t,v,isSel,foc,r,c); setBorder(new EmptyBorder(0, 10, 0, 0)); if(isSel) { setBackground(new Color(70,70,70)); setForeground(Color.WHITE); } else { Aktywo a = mapaWierszyDoAktywow.get(r); if(a==null) { setBackground(new Color(38,38,38)); setForeground(BLUE); setFont(getFont().deriveFont(Font.BOLD)); } else { setBackground(CARD_BG); setForeground(TEXT_MAIN); } } return comp; } });
+        tabela.setDefaultRenderer(Object.class, new DefaultTableCellRenderer(){
+            public Component getTableCellRendererComponent(JTable t, Object v, boolean isSel, boolean foc, int r, int c) {
+                Component comp = super.getTableCellRendererComponent(t,v,isSel,foc,r,c);
+                setBorder(new EmptyBorder(0, 10, 0, 0));
+                if(isSel) { setBackground(new Color(70,70,70)); setForeground(Color.WHITE); }
+                else {
+                    Aktywo a = mapaWierszyDoAktywow.get(r);
+                    if(a==null) {
+                        setBackground(new Color(25, 25, 25));
+                        setForeground(TEXT_MAIN);
+                        setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                    } else {
+                        setBackground(CARD_BG); setForeground(TEXT_MAIN);
+                    }
+                }
+                return comp;
+            }
+        });
     }
 }
