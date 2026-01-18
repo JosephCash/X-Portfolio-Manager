@@ -49,28 +49,61 @@ public class PortfolioManager extends JFrame {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ignored) {}
 
-        // >>> FIX: kolor nagłówka tabeli podczas przeciągania kolumn (biała "dziura") <<<
         UIManager.put("TableHeader.background", BG_COLOR);
         UIManager.put("TableHeader.focusCellBackground", BG_COLOR);
-        // (opcjonalnie, ale często pomaga)
         UIManager.put("TableHeader.foreground", TEXT_DIM);
-        // <<< KONIEC FIXA <<<
-        UIManager.put("control", BG_COLOR); // czasem dla Nimbus / niektórych LAF
+        UIManager.put("control", BG_COLOR);
         UIManager.put("TableHeader.border", BorderFactory.createMatteBorder(0,0,1,0,BORDER_COLOR));
 
         SwingUtilities.invokeLater(PortfolioManager::pokazSplash);
     }
 
-
     private static void pokazSplash() {
         JWindow splash = new JWindow();
-        splash.setSize(450, 280); splash.setLocationRelativeTo(null);
-        JPanel content = new JPanel(new BorderLayout()); content.setBackground(BG_COLOR); content.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));
-        JLabel title = new JLabel("X-Portfolio Manager", SwingConstants.CENTER); title.setFont(new Font("Segoe UI", Font.BOLD, 26)); title.setForeground(TEXT_MAIN); title.setBorder(new EmptyBorder(40, 0, 0, 0));
-        JLabel sub = new JLabel("Twoje centrum inwestycyjne", SwingConstants.CENTER); sub.setFont(FONT_NORMAL); sub.setForeground(TEXT_DIM); sub.setBorder(new EmptyBorder(10, 0, 0, 0));
-        JPanel txt = new JPanel(new BorderLayout()); txt.setBackground(BG_COLOR); txt.add(title, BorderLayout.NORTH); txt.add(sub, BorderLayout.CENTER);
-        JLabel stat = new JLabel("Inicjalizacja...", SwingConstants.CENTER); stat.setForeground(TEXT_DIM); stat.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        JProgressBar bar = new JProgressBar(0, 100); bar.setPreferredSize(new Dimension(450, 6)); bar.setBorderPainted(false); bar.setBackground(CARD_BG); bar.setForeground(ACCENT);
+        splash.setSize(450, 320);
+        splash.setLocationRelativeTo(null);
+
+        JPanel content = new JPanel(new BorderLayout());
+        content.setBackground(BG_COLOR);
+        content.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));
+
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setBackground(BG_COLOR);
+        centerPanel.setBorder(new EmptyBorder(30, 0, 20, 0));
+
+        JLabel title = new JLabel("X-Portfolio Manager");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        title.setForeground(TEXT_MAIN);
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel sub = new JLabel("Twoje centrum inwestycyjne");
+        sub.setFont(FONT_NORMAL);
+        sub.setForeground(TEXT_DIM);
+        sub.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        centerPanel.add(title);
+        centerPanel.add(Box.createVerticalStrut(5));
+        centerPanel.add(sub);
+
+        centerPanel.add(Box.createVerticalStrut(25));
+
+        ImageIcon logoIcon = loadIcon("app_icon.png", 80);
+        if (logoIcon != null) {
+            JLabel lLogo = new JLabel(logoIcon);
+            lLogo.setAlignmentX(Component.CENTER_ALIGNMENT);
+            centerPanel.add(lLogo);
+        }
+
+        JLabel stat = new JLabel("Inicjalizacja...", SwingConstants.CENTER);
+        stat.setForeground(TEXT_DIM);
+        stat.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+
+        JProgressBar bar = new JProgressBar(0, 100);
+        bar.setPreferredSize(new Dimension(450, 6));
+        bar.setBorderPainted(false);
+        bar.setBackground(CARD_BG);
+        bar.setForeground(ACCENT);
 
         bar.setUI(new BasicProgressBarUI() {
             @Override protected void paintDeterminate(Graphics g, JComponent c) {
@@ -81,8 +114,15 @@ public class PortfolioManager extends JFrame {
             }
         });
 
-        JPanel bot = new JPanel(new BorderLayout()); bot.setBackground(BG_COLOR); bot.add(stat, BorderLayout.NORTH); bot.add(bar, BorderLayout.SOUTH);
-        content.add(txt, BorderLayout.CENTER); content.add(bot, BorderLayout.SOUTH); splash.add(content); splash.setVisible(true);
+        JPanel bot = new JPanel(new BorderLayout());
+        bot.setBackground(BG_COLOR);
+        bot.add(stat, BorderLayout.NORTH);
+        bot.add(bar, BorderLayout.SOUTH);
+
+        content.add(centerPanel, BorderLayout.CENTER);
+        content.add(bot, BorderLayout.SOUTH);
+        splash.add(content);
+        splash.setVisible(true);
 
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() throws Exception {
@@ -104,12 +144,34 @@ public class PortfolioManager extends JFrame {
     }
 
     public PortfolioManager() {
-        setUndecorated(true); setSize(1100, 750); setLocationRelativeTo(null); setDefaultCloseOperation(EXIT_ON_CLOSE);
-        getContentPane().setBackground(BG_COLOR); getRootPane().setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
+        setUndecorated(true);
+        setSize(1100, 750);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        getContentPane().setBackground(BG_COLOR);
+        getRootPane().setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
 
-        // --- NAGŁÓWEK ---
-        JPanel header = new JPanel(new BorderLayout()); header.setBackground(BG_COLOR); header.setBorder(new EmptyBorder(10, 20, 10, 10));
-        JLabel appTitle = new JLabel("X-Portfolio Manager"); appTitle.setFont(new Font("Segoe UI", Font.BOLD, 16)); appTitle.setForeground(TEXT_DIM);
+        ImageIcon appIcon = loadIcon("app_icon.png", 512);
+        if (appIcon != null) {
+            setIconImage(appIcon.getImage());
+        }
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(BG_COLOR);
+        header.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        titlePanel.setOpaque(false);
+
+        ImageIcon smallIcon = loadIcon("app_icon.png", 20);
+        if (smallIcon != null) {
+            titlePanel.add(new JLabel(smallIcon));
+        }
+
+        JLabel appTitle = new JLabel("X-Portfolio Manager");
+        appTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        appTitle.setForeground(TEXT_DIM);
+        titlePanel.add(appTitle);
 
         JPanel controls = new JPanel(new GridLayout(1, 2, 5, 0));
         controls.setOpaque(false);
@@ -117,7 +179,8 @@ public class PortfolioManager extends JFrame {
         JButton btnClose = createWinButton("X", true); btnClose.addActionListener(e -> System.exit(0));
         controls.add(btnMin); controls.add(btnClose);
 
-        header.add(appTitle, BorderLayout.WEST); header.add(controls, BorderLayout.EAST);
+        header.add(titlePanel, BorderLayout.WEST);
+        header.add(controls, BorderLayout.EAST);
 
         MouseAdapter ma = new MouseAdapter() {
             public void mousePressed(MouseEvent me) { pX = me.getX(); pY = me.getY(); }
@@ -269,7 +332,7 @@ public class PortfolioManager extends JFrame {
         stylizujInput(tfName);
         tfName.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // --- PANEL IKON (ZMODYFIKOWANY) ---
+        // --- PANEL IKON ---
         JPanel iconPanel = new JPanel(new GridLayout(2, 2, 20, 20));
         iconPanel.setOpaque(false);
         iconPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -281,11 +344,7 @@ public class PortfolioManager extends JFrame {
 
         for(String ic : icons) {
             JToggleButton btn = new JToggleButton();
-
-            // WAŻNE: Zapamiętujemy nazwę bazową ikony w przycisku
             btn.putClientProperty("baseIcon", ic);
-
-            // Stylizacja przycisku
             btn.setBackground(INPUT_BG);
             btn.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
             btn.setFocusPainted(false);
@@ -293,34 +352,25 @@ public class PortfolioManager extends JFrame {
             btn.setOpaque(true);
             btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-            // Ustawienie stanu początkowego (wybrany vs niewybrany)
             if(ic.equals(selectedIconTemp)) {
                 btn.setSelected(true);
                 btn.setBackground(ACCENT);
-                // Dla wybranego ładujemy ikonę z dopiskiem _w
                 btn.setIcon(loadIcon(ic.replace(".png", "_w.png"), 64));
             } else {
                 btn.setBackground(INPUT_BG);
-                // Dla zwykłego ładujemy normalną ikonę
                 btn.setIcon(loadIcon(ic, 64));
             }
 
-            // Logika kliknięcia
             btn.addActionListener(e -> {
                 selectedIconTemp = ic;
-
-                // Przelatujemy przez wszystkie przyciski w grupie, aby zaktualizować ich wygląd
                 Enumeration<AbstractButton> bs = bg.getElements();
                 while(bs.hasMoreElements()) {
                     AbstractButton b = bs.nextElement();
-                    String base = (String) b.getClientProperty("baseIcon"); // Pobieramy nazwę bazową (np. wallet.png)
-
+                    String base = (String) b.getClientProperty("baseIcon");
                     if (b == btn) {
-                        // Ten przycisk został właśnie kliknięty -> Zielone tło, biała ikona
                         b.setBackground(ACCENT);
                         b.setIcon(loadIcon(base.replace(".png", "_w.png"), 64));
                     } else {
-                        // Reszta przycisków -> Ciemne tło, zwykła ikona
                         b.setBackground(INPUT_BG);
                         b.setIcon(loadIcon(base, 64));
                     }
@@ -340,7 +390,6 @@ public class PortfolioManager extends JFrame {
         form.add(iconPanel);
         form.add(Box.createVerticalGlue());
 
-        // --- PRZYCISK ZAPISU ---
         JButton btnSave = new JButton(trybEdycji ? "ZAPISZ ZMIANY" : "UTWÓRZ");
         styleButton(btnSave, ACCENT);
         btnSave.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -369,7 +418,6 @@ public class PortfolioManager extends JFrame {
         d.setVisible(true);
     }
 
-    // --- UTYLITY PUBLICZNE ---
     public static ImageIcon loadIcon(String name, int size) {
         try {
             URL url = PortfolioManager.class.getResource("/icons/" + name);
@@ -391,11 +439,8 @@ public class PortfolioManager extends JFrame {
     private static JButton createZeroButton() { JButton b=new JButton(); b.setPreferredSize(new Dimension(0,0)); return b; }
     private JButton createWinButton(String t, boolean red) { JButton b = new JButton(t); b.setUI(new BasicButtonUI()); b.setBorder(null); b.setBackground(BG_COLOR); b.setForeground(TEXT_MAIN); b.setPreferredSize(new Dimension(45, 30)); b.setFocusPainted(false); b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setBackground(red ? ACCENT_RED : CARD_HOVER); } public void mouseExited(MouseEvent e) { b.setBackground(BG_COLOR); } }); return b; }
 
-    // FIX: Wyśrodkowanie etykiet
     private JLabel createLabel(String txt) { JLabel l = new JLabel(txt); l.setForeground(TEXT_DIM); l.setAlignmentX(Component.CENTER_ALIGNMENT); return l; }
 
-    // FIX: Ulepszona stylizacja ComboBoxa (poprawiona obsługa stanu disabled)
-// FIX: Stylizacja ComboBoxa z wymuszonym ciemnym tłem dla stanu DISABLED
     public static void stylizujComboBox(JComboBox<?> combo) {
         combo.setFont(FONT_NORMAL);
         combo.setBackground(INPUT_BG);
@@ -414,9 +459,6 @@ public class PortfolioManager extends JFrame {
                 return btn;
             }
 
-            // KLUCZOWA ZMIANA: Nadpisujemy metodę rysującą wybraną wartość.
-            // Domyślna implementacja Swing pobiera kolory z UIManagera dla stanu disabled (często białe/szare).
-            // Tutaj wymuszamy nasze kolory INPUT_BG i TEXT_DIM.
             @Override
             public void paintCurrentValue(Graphics g, Rectangle bounds, boolean hasFocus) {
                 ListCellRenderer renderer = comboBox.getRenderer();
@@ -430,16 +472,14 @@ public class PortfolioManager extends JFrame {
 
                 c.setFont(comboBox.getFont());
 
-                // RĘCZNE WYMUSZENIE KOLORÓW
                 if (!comboBox.isEnabled()) {
                     c.setForeground(TEXT_DIM);
-                    c.setBackground(INPUT_BG); // To naprawia białe tło w "Krypto"
+                    c.setBackground(INPUT_BG);
                 } else {
                     c.setForeground(TEXT_MAIN);
                     c.setBackground(INPUT_BG);
                 }
 
-                // Upewniamy się, że komponent jest nieprzezroczysty, żeby kolor tła był widoczny
                 if (c instanceof JComponent) {
                     ((JComponent) c).setOpaque(true);
                 }
@@ -455,7 +495,6 @@ public class PortfolioManager extends JFrame {
             }
         });
 
-        // Renderer dla listy rozwijanej (elementy w środku)
         combo.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
@@ -474,7 +513,6 @@ public class PortfolioManager extends JFrame {
         });
     }
 
-    // FIX: Spinner bez białej ramki
     public static void stylizujSpinner(JSpinner spinner) {
         spinner.setFont(FONT_NORMAL);
         spinner.setBackground(INPUT_BG);
@@ -487,22 +525,35 @@ public class PortfolioManager extends JFrame {
             tf.setForeground(TEXT_MAIN);
             tf.setCaretColor(TEXT_MAIN);
             tf.setBorder(new EmptyBorder(0, 5, 0, 0));
+
+            // --- FIX: WYRÓWNANIE DO LEWEJ ---
+            tf.setHorizontalAlignment(JTextField.LEFT);
         }
 
         spinner.setUI(new javax.swing.plaf.basic.BasicSpinnerUI() {
-            @Override protected Component createNextButton() { return createArrowButton("▲"); }
-            @Override protected Component createPreviousButton() { return createArrowButton("▼"); }
+            @Override protected Component createNextButton() { return createArrowButton("▲", 1); }
+            @Override protected Component createPreviousButton() { return createArrowButton("▼", -1); }
 
-            private JButton createArrowButton(String txt) {
+            private JButton createArrowButton(String txt, int direction) {
                 JButton b = new JButton(txt);
                 b.setBorder(null); b.setFocusPainted(false); b.setContentAreaFilled(false);
                 b.setForeground(TEXT_DIM); b.setBackground(INPUT_BG);
                 b.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 10));
                 b.setPreferredSize(new Dimension(20, 10));
+
                 b.addMouseListener(new MouseAdapter() {
                     public void mouseEntered(MouseEvent e) { b.setForeground(Color.WHITE); }
                     public void mouseExited(MouseEvent e) { b.setForeground(TEXT_DIM); }
                 });
+
+                // --- FIX: DZIAŁAJĄCE STRZAŁKI ---
+                b.addActionListener(e -> {
+                    try {
+                        Object val = (direction > 0) ? spinner.getNextValue() : spinner.getPreviousValue();
+                        if (val != null) spinner.setValue(val);
+                    } catch (Exception ignored) {}
+                });
+
                 return b;
             }
         });
@@ -518,4 +569,3 @@ public class PortfolioManager extends JFrame {
     public void wrocDoDashboard() { cardLayout.show(mainContainer, "DASHBOARD"); odswiezDashboard(); }
 
 }
-

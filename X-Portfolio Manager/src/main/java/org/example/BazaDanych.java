@@ -4,121 +4,161 @@ import java.io.*;
 import java.util.*;
 
 public class BazaDanych {
-    private static final String PREFIX = "portfel_";
-    private static final String EXT = ".txt";
-    private static final String CONFIG_FILE = "portfolio_icons.properties";
-    private static final Properties iconProps = new Properties();
 
-    static {
-        // Migracja starego pliku
-        File stary = new File("portfel.txt");
-        if (stary.exists()) stary.renameTo(new File(PREFIX + "Główny" + EXT));
+    private static final String FOLDER_NAME = "X-Portfolio Manager";
+    private static final String ICONS_FILE = "portfolio_icons.properties";
 
-        // Ładowanie konfiguracji ikon
-        zaladujIkony();
-    }
-
-    private static void zaladujIkony() {
-        try (FileInputStream in = new FileInputStream(CONFIG_FILE)) {
-            iconProps.load(in);
-        } catch (IOException e) {
-            // Plik pewnie nie istnieje, to normalne przy pierwszym uruchomieniu
-        }
-    }
-
-    private static void zapiszIkony() {
-        try (FileOutputStream out = new FileOutputStream(CONFIG_FILE)) {
-            iconProps.store(out, "Przypisanie ikon do portfeli");
-        } catch (IOException e) { e.printStackTrace(); }
-    }
-
-    public static void ustawIkone(String nazwaPortfela, String nazwaIkony) {
-        iconProps.setProperty(nazwaPortfela, nazwaIkony);
-        zapiszIkony();
-    }
-
-    public static String pobierzIkone(String nazwaPortfela) {
-        return iconProps.getProperty(nazwaPortfela, "wallet.png"); // Domyślna ikona
-    }
-
-    public static List<String> pobierzNazwyPortfeli() {
-        List<String> portfele = new ArrayList<>();
-        File folder = new File(".");
-        File[] pliki = folder.listFiles((dir, name) -> name.startsWith(PREFIX) && name.endsWith(EXT));
-        if (pliki != null) {
-            for (File f : pliki) portfele.add(f.getName().replace(PREFIX, "").replace(EXT, ""));
-        }
-        return portfele;
-    }
-
-    public static void utworzPortfel(String nazwa) {
-        try { new File(PREFIX + nazwa + EXT).createNewFile(); } catch (IOException e) { e.printStackTrace(); }
-    }
-
-    public static boolean zmienNazwePortfela(String stara, String nowa) {
-        File f1 = new File(PREFIX + stara + EXT);
-        File f2 = new File(PREFIX + nowa + EXT);
-
-        if (f1.exists() && !f2.exists()) {
-            boolean sukces = f1.renameTo(f2);
-            if (sukces) {
-                // Przenosimy też ikonę w konfiguracji
-                String icon = iconProps.getProperty(stara);
-                if (icon != null) {
-                    iconProps.remove(stara);
-                    iconProps.setProperty(nowa, icon);
-                    zapiszIkony();
-                }
-            }
-            return sukces;
-        }
-        return false;
-    }
-
-    public static void usunPortfel(String nazwa) {
-        File f = new File(PREFIX + nazwa + EXT);
-        if(f.exists()) f.delete();
-        // Usuwamy wpis o ikonie
-        if (iconProps.containsKey(nazwa)) {
-            iconProps.remove(nazwa);
-            zapiszIkony();
-        }
-    }
-
-    public static void zapisz(List<Aktywo> lista, String nazwa) {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(PREFIX + nazwa + EXT))) {
-            for (Aktywo a : lista) writer.println(a.toCSV());
-        } catch (IOException e) { e.printStackTrace(); }
-    }
-
-    public static List<Aktywo> wczytaj(String nazwa) {
+    public static List<Aktywo> wczytaj(String nazwaPortfela) {
         List<Aktywo> lista = new ArrayList<>();
-        File file = new File(PREFIX + nazwa + EXT);
+        File file = new File(FOLDER_NAME + File.separator + "portfel_" + nazwaPortfela + ".txt");
+
         if (!file.exists()) return lista;
 
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+
                 String[] parts = line.split(";");
-                if (parts.length < 6) continue;
+                if (parts.length < 5) continue;
 
-                String klasa = parts[0];
-                String symbol = parts[1]; // <--- TUTAJ BYŁ BŁĄD (było 'sym')
-                TypAktywa typ = TypAktywa.valueOf(parts[2]);
-                double ilosc = Double.parseDouble(parts[3]);
-                String data = parts[4];
-                Waluta waluta = Waluta.valueOf(parts[5]);
+                String marker = parts[0];
 
-                if (klasa.equals("RYNEK")) {
-                    double cena = (parts.length > 6) ? Double.parseDouble(parts[6]) : 0.0;
-                    lista.add(new AktywoRynkowe(symbol, typ, ilosc, data, waluta, cena));
-                } else if (klasa.equals("OBL_STALA")) {
-                    lista.add(new ObligacjaStala(symbol, ilosc, data, Double.parseDouble(parts[6])));
-                } else if (klasa.equals("OBL_INDEKS")) {
-                    lista.add(new ObligacjaIndeksowana(symbol, ilosc, data, Double.parseDouble(parts[6]), Double.parseDouble(parts[7])));
+                if (marker.equals("OBL_SKARB")) {
+                    String sym = parts[1];
+                    // ODCZYTUJEMY TYP Z PLIKU (żeby pamiętać wybór usera)
+                    TypAktywa typZPliku = null;
+                    try { typZPliku = TypAktywa.valueOf(parts[2]); } catch(Exception e) {}
+
+                    double ilosc = Double.parseDouble(parts[3]);
+                    String data = parts[4];
+
+                    Double mRate = null;
+                    Double mMargin = null;
+
+                    if (parts.length > 6 && !parts[6].isEmpty()) {
+                        try { mRate = Double.parseDouble(parts[6]); } catch(Exception e) {}
+                    }
+                    if (parts.length > 7 && !parts[7].isEmpty()) {
+                        try { mMargin = Double.parseDouble(parts[7]); } catch(Exception e) {}
+                    }
+
+                    // Przekazujemy typZPliku do konstruktora
+                    lista.add(new ObligacjaSkarbowa(sym, typZPliku, ilosc, data, mRate, mMargin));
+                }
+                else if (marker.equals("AKCJA_PL") || marker.equals("AKCJA_USA") || marker.equals("KRYPTO")) {
+                    try {
+                        String symbol = parts[1];
+                        TypAktywa typ = TypAktywa.valueOf(parts[2]);
+                        double ilosc = Double.parseDouble(parts[3]);
+                        String data = parts[4];
+                        Waluta waluta = Waluta.valueOf(parts[5]);
+                        double cenaZakupu = (parts.length > 6) ? Double.parseDouble(parts[6]) : 0.0;
+
+                        lista.add(new AktywoRynkowe(symbol, typ, ilosc, data, waluta, cenaZakupu));
+                    } catch (Exception e) {
+                        System.err.println("Błąd wczytywania aktywa: " + line);
+                    }
+                }
+                // Kompatybilność wsteczna
+                else if (marker.equals("OBL_STALA")) {
+                    lista.add(new ObligacjaSkarbowa(parts[1], TypAktywa.OBLIGACJA_STALA, Double.parseDouble(parts[3]), parts[4], null, null));
+                }
+                else if (marker.equals("OBL_INDEKS")) {
+                    lista.add(new ObligacjaSkarbowa(parts[1], TypAktywa.OBLIGACJA_INDEKSOWANA, Double.parseDouble(parts[3]), parts[4], null, null));
                 }
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         return lista;
+    }
+
+    public static void zapisz(String nazwaPortfela, List<Aktywo> aktywa) {
+        File folder = new File(FOLDER_NAME);
+        if (!folder.exists()) folder.mkdir();
+
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(FOLDER_NAME + File.separator + "portfel_" + nazwaPortfela + ".txt"))) {
+            for (Aktywo a : aktywa) {
+                bw.write(a.toCSV());
+                bw.newLine();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static List<String> pobierzNazwyPortfeli() {
+        List<String> nazwy = new ArrayList<>();
+        File folder = new File(FOLDER_NAME);
+        if (!folder.exists()) return nazwy;
+
+        File[] files = folder.listFiles((dir, name) -> name.startsWith("portfel_") && name.endsWith(".txt"));
+        if (files != null) {
+            for (File f : files) {
+                String n = f.getName();
+                nazwy.add(n.substring(8, n.length() - 4));
+            }
+        }
+        Collections.sort(nazwy);
+        return nazwy;
+    }
+
+    public static void utworzPortfel(String nazwa) {
+        zapisz(nazwa, new ArrayList<>());
+        ustawIkone(nazwa, "wallet.png");
+    }
+
+    public static void usunPortfel(String nazwa) {
+        File f = new File(FOLDER_NAME + File.separator + "portfel_" + nazwa + ".txt");
+        if (f.exists()) f.delete();
+        usunIkone(nazwa);
+    }
+
+    public static void zmienNazwePortfela(String staraNazwa, String nowaNazwa) {
+        File stary = new File(FOLDER_NAME + File.separator + "portfel_" + staraNazwa + ".txt");
+        File nowy = new File(FOLDER_NAME + File.separator + "portfel_" + nowaNazwa + ".txt");
+        if (stary.exists()) {
+            stary.renameTo(nowy);
+            String icon = pobierzIkone(staraNazwa);
+            usunIkone(staraNazwa);
+            ustawIkone(nowaNazwa, icon);
+        }
+    }
+
+    public static String pobierzIkone(String nazwaPortfela) {
+        Properties props = loadIcons();
+        return props.getProperty(nazwaPortfela, "wallet.png");
+    }
+
+    public static void ustawIkone(String nazwaPortfela, String nazwaIkony) {
+        Properties props = loadIcons();
+        props.setProperty(nazwaPortfela, nazwaIkony);
+        saveIcons(props);
+    }
+
+    private static void usunIkone(String nazwaPortfela) {
+        Properties props = loadIcons();
+        props.remove(nazwaPortfela);
+        saveIcons(props);
+    }
+
+    private static Properties loadIcons() {
+        Properties props = new Properties();
+        File f = new File(FOLDER_NAME + File.separator + ICONS_FILE);
+        if (f.exists()) {
+            try (FileInputStream in = new FileInputStream(f)) {
+                props.load(in);
+            } catch (IOException e) { e.printStackTrace(); }
+        }
+        return props;
+    }
+
+    private static void saveIcons(Properties props) {
+        File folder = new File(FOLDER_NAME);
+        if (!folder.exists()) folder.mkdir();
+        try (FileOutputStream out = new FileOutputStream(FOLDER_NAME + File.separator + ICONS_FILE)) {
+            props.store(out, "Konfiguracja ikon portfeli");
+        } catch (IOException e) { e.printStackTrace(); }
     }
 }

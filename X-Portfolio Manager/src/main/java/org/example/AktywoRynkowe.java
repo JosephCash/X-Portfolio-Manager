@@ -18,11 +18,11 @@ public class AktywoRynkowe extends Aktywo {
         return cenaZakupu;
     }
 
-    // IMPLEMENTACJA zapisu do pliku (tego brakowało)
+    // --- POPRAWKA: Używamy typ.name() zamiast "RYNEK", aby BazaDanych mogła to odczytać ---
     @Override
     public String toCSV() {
         return String.join(";",
-                "RYNEK",
+                typ.name(),            // <--- ZMIANA: Było "RYNEK", jest typ.name() (np. AKCJA_PL)
                 symbol,
                 typ.name(),
                 String.valueOf(ilosc),
