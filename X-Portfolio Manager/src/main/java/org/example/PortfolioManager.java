@@ -45,9 +45,22 @@ public class PortfolioManager extends JFrame {
     private final Map<String, JLabel> infoLabelsMap = new ConcurrentHashMap<>();
 
     public static void main(String[] args) {
-        try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) {}
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {}
+
+        // >>> FIX: kolor nagłówka tabeli podczas przeciągania kolumn (biała "dziura") <<<
+        UIManager.put("TableHeader.background", BG_COLOR);
+        UIManager.put("TableHeader.focusCellBackground", BG_COLOR);
+        // (opcjonalnie, ale często pomaga)
+        UIManager.put("TableHeader.foreground", TEXT_DIM);
+        // <<< KONIEC FIXA <<<
+        UIManager.put("control", BG_COLOR); // czasem dla Nimbus / niektórych LAF
+        UIManager.put("TableHeader.border", BorderFactory.createMatteBorder(0,0,1,0,BORDER_COLOR));
+
         SwingUtilities.invokeLater(PortfolioManager::pokazSplash);
     }
+
 
     private static void pokazSplash() {
         JWindow splash = new JWindow();
@@ -503,4 +516,6 @@ public class PortfolioManager extends JFrame {
         cardLayout.show(mainContainer, "PORTFOLIO");
     }
     public void wrocDoDashboard() { cardLayout.show(mainContainer, "DASHBOARD"); odswiezDashboard(); }
+
 }
+
