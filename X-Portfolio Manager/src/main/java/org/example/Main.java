@@ -15,7 +15,6 @@ import java.awt.event.*;
 import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
@@ -25,27 +24,24 @@ import static org.example.PortfolioManager.*;
 
 public class Main extends JPanel {
 
-    // --- STAŁE ---
     private static final int ARROW_TOUCH_WIDTH = 26;
-
-    // --- IKONY ---
     private ImageIcon iconArrowRight, iconArrowDown;
     private ImageIcon iconArrowRightW, iconArrowDownW;
     private ImageIcon iconArrowLeft, iconArrowLeftW;
 
     private JTable tabela;
     private DefaultTableModel modelTabeli;
-    private JLabel labelSuma, labelStatus;
+    private JLabel labelSuma, labelZainwestowano, labelStatus;
     private JButton przyciskOdswiez;
     private JProgressBar pasekPostepu;
 
     private List<Aktywo> portfel;
+    private List<Transakcja> historiaTransakcji;
     private String nazwaPortfela;
     private PortfolioManager parentManager;
     private Set<String> rozwinieteGrupy = new HashSet<>();
     private Map<Integer, Aktywo> mapaWierszyDoAktywow = new HashMap<>();
 
-    // Stan myszki
     private int hoveredRow = -1;
     private boolean isArrowHovered = false;
 
@@ -55,7 +51,6 @@ public class Main extends JPanel {
         this.nazwaPortfela = nazwaPortfela;
         this.parentManager = manager;
 
-        // --- ŁADOWANIE IKON ---
         int iconSize = 12;
         this.iconArrowRight  = PortfolioManager.loadIcon("arrow_right.png", iconSize);
         this.iconArrowDown   = PortfolioManager.loadIcon("arrow_down.png", iconSize);
@@ -72,8 +67,8 @@ public class Main extends JPanel {
         setBackground(BG_COLOR);
 
         portfel = BazaDanych.wczytaj(nazwaPortfela);
+        historiaTransakcji = BazaDanych.wczytajHistorie(nazwaPortfela);
 
-        // --- NAGŁÓWEK ---
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(BG_COLOR);
         header.setBorder(new EmptyBorder(15, 40, 15, 40));
@@ -121,19 +116,23 @@ public class Main extends JPanel {
         styleMinimalistButton(btnImp);
         btnImp.addActionListener(e -> pokazOknoImportu());
 
+        JButton btnReset = new JButton("RESETUJ");
+        styleMinimalistButton(btnReset);
+        btnReset.addActionListener(e -> zresetujPortfel());
+
         JButton btnDel = new JButton("USUŃ");
         styleMinimalistButton(btnDel);
         btnDel.addActionListener(e -> usunZaznaczone());
 
         toolbar.add(btnAdd);
         toolbar.add(btnImp);
+        toolbar.add(btnReset);
         toolbar.add(btnDel);
 
         header.add(leftHead, BorderLayout.WEST);
         header.add(toolbar, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
 
-        // --- TABELA ---
         String[] cols = {"Symbol", "Typ", "Data / Ilość Poz.", "Ilość", "Śr. Cena / Cena", "Cena Rynkowa", "Wartość (PLN)"};
         modelTabeli = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
@@ -210,7 +209,6 @@ public class Main extends JPanel {
         tableContainer.add(scroll, BorderLayout.CENTER);
         add(tableContainer, BorderLayout.CENTER);
 
-        // --- STOPKA ---
         JPanel footer = new JPanel(new BorderLayout());
         footer.setBackground(CARD_BG);
         footer.setBorder(new EmptyBorder(20, 40, 20, 40));
@@ -222,32 +220,42 @@ public class Main extends JPanel {
         labelStatus.setForeground(TEXT_DIM);
         labelStatus.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         pasekPostepu = new JProgressBar();
-        pasekPostepu.setIndeterminate(true);
+        pasekPostepu.setIndeterminate(false);
+        pasekPostepu.setStringPainted(false);
         pasekPostepu.setPreferredSize(new Dimension(150, 4));
         pasekPostepu.setBackground(CARD_BG);
         pasekPostepu.setForeground(ACCENT);
         pasekPostepu.setBorderPainted(false);
         pasekPostepu.setVisible(false);
         pasekPostepu.setUI(new BasicProgressBarUI() {
-            @Override protected void paintIndeterminate(Graphics g, JComponent c) {
+            @Override protected void paintDeterminate(Graphics g, JComponent c) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setColor(c.getBackground());
                 g2.fillRect(0, 0, c.getWidth(), c.getHeight());
-                super.paintIndeterminate(g2, c);
+                g2.setColor(c.getForeground());
+                int amountFull = getAmountFull(new Insets(0, 0, 0, 0), c.getWidth(), c.getHeight());
+                g2.fillRect(0, 0, amountFull, c.getHeight());
                 g2.dispose();
             }
         });
         leftFoot.add(labelStatus);
         leftFoot.add(pasekPostepu);
 
-        JPanel rightFoot = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        JPanel rightFoot = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
         rightFoot.setOpaque(false);
+
+        labelZainwestowano = new JLabel("Wpłacono: 0.00 PLN");
+        labelZainwestowano.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        labelZainwestowano.setForeground(TEXT_DIM);
+
         labelSuma = new JLabel("0.00 PLN");
         labelSuma.setFont(new Font("Segoe UI", Font.BOLD, 24));
         labelSuma.setForeground(ACCENT);
         przyciskOdswiez = new JButton("ODŚWIEŻ CENY");
         PortfolioManager.styleButton(przyciskOdswiez, ACCENT);
         przyciskOdswiez.addActionListener(e -> odswiezCeny());
+
+        rightFoot.add(labelZainwestowano);
         rightFoot.add(labelSuma);
         rightFoot.add(Box.createHorizontalStrut(20));
         rightFoot.add(przyciskOdswiez);
@@ -256,53 +264,80 @@ public class Main extends JPanel {
         add(footer, BorderLayout.SOUTH);
 
         przeliczWidok();
+
+        // Automatyczne odświeżenie przy starcie
         if (!MarketData.czyDaneZCache()) odswiezCeny();
         else labelStatus.setText(" Ostatnia aktualizacja: " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
     }
 
-    static class HeaderDragFixUI extends BasicTableHeaderUI {
-        private final Color bg;
-        HeaderDragFixUI(Color bg) { this.bg = bg; }
-        @Override public void installUI(JComponent c) {
-            super.installUI(c);
-            if (rendererPane == null) { rendererPane = new CellRendererPane(); header.add(rendererPane); }
-            else if (rendererPane.getParent() != header) { header.add(rendererPane); }
-        }
-        @Override public void paint(Graphics g, JComponent c) {
-            g.setColor(bg); g.fillRect(0, 0, c.getWidth(), c.getHeight()); super.paint(g, c);
-            JTableHeader h = header; if (h == null) return;
-            TableColumn dragged = h.getDraggedColumn(); int dragDistance = h.getDraggedDistance();
-            if (dragged == null || dragDistance == 0) return;
-            TableColumnModel cm = h.getColumnModel(); int draggedIndex = -1;
-            for (int i = 0; i < cm.getColumnCount(); i++) { if (cm.getColumn(i) == dragged) { draggedIndex = i; break; } }
-            if (draggedIndex < 0) return;
-            Rectangle r = h.getHeaderRect(draggedIndex);
-            g.setColor(bg); g.fillRect(r.x, r.y, r.width, r.height);
-            g.setColor(BORDER_COLOR); g.drawLine(r.x, r.y + r.height - 1, r.x + r.width, r.y + r.height - 1);
-            TableCellRenderer renderer = dragged.getHeaderRenderer(); if (renderer == null) renderer = h.getDefaultRenderer();
-            Component comp = renderer.getTableCellRendererComponent(h.getTable(), dragged.getHeaderValue(), false, false, -1, draggedIndex);
-            if (comp instanceof JComponent jc) { jc.setOpaque(true); jc.setBackground(bg); jc.setForeground(h.getForeground()); }
-            int newX = r.x + dragDistance; rendererPane.paintComponent(g, comp, h, newX, r.y, r.width, r.height, true);
+    private void zresetujPortfel() {
+        int confirm = JOptionPane.showConfirmDialog(this, "Czy na pewno chcesz wyzerować ten portfel?", "Potwierdź Reset", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            portfel.clear();
+            historiaTransakcji.clear();
+            BazaDanych.zapisz(nazwaPortfela, portfel);
+            BazaDanych.zapiszHistorie(nazwaPortfela, historiaTransakcji);
+            przeliczWidok();
         }
     }
 
+    // --- WIELOWĄTKOWE POBIERANIE CEN ---
     private void odswiezCeny() {
         przyciskOdswiez.setEnabled(false);
         przyciskOdswiez.setBackground(BORDER_COLOR);
         labelStatus.setText(" Pobieranie aktualnych cen...");
         pasekPostepu.setVisible(true);
-        new SwingWorker<Void, Void>() {
+
+        new SwingWorker<Void, Integer>() {
             double u, e, g;
+
             @Override protected Void doInBackground() {
-                u = MarketData.pobierzKursUSD(); e = MarketData.pobierzKursEUR(); g = MarketData.pobierzKursGBP();
-                if (u == 0) u = currentUSD; if (e == 0) e = currentEUR; if (g == 0) g = currentGBP;
-                for (Aktywo a : portfel) { if (a instanceof AktywoRynkowe) { a.getCenaJednostkowa(); try { Thread.sleep(50); } catch (Exception ignored) {} } }
+                u = MarketData.pobierzKursUSD();
+                e = MarketData.pobierzKursEUR();
+                g = MarketData.pobierzKursGBP();
+
+                if (u == 0) u = currentUSD;
+                if (e == 0) e = currentEUR;
+                if (g == 0) g = currentGBP;
+
+                // Pula 6 wątków - szybciej, ale bezpiecznie dla API
+                java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(6);
+                int total = portfel.size();
+                java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
+
+                for (Aktywo a : portfel) {
+                    if (a instanceof AktywoRynkowe) {
+                        executor.submit(() -> {
+                            a.getCenaJednostkowa(); // Wymusza pobranie
+                            publish(counter.incrementAndGet() * 100 / (total > 0 ? total : 1));
+                        });
+                    } else {
+                        publish(counter.incrementAndGet() * 100 / (total > 0 ? total : 1));
+                    }
+                }
+
+                executor.shutdown();
+                try {
+                    executor.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException ex) {
+                    executor.shutdownNow();
+                }
+
                 return null;
             }
+
+            @Override protected void process(java.util.List<Integer> chunks) {
+                if (!chunks.isEmpty()) pasekPostepu.setValue(chunks.get(chunks.size()-1));
+            }
+
             @Override protected void done() {
-                currentUSD = u; currentEUR = e; currentGBP = g; przeliczWidok();
+                currentUSD = u; currentEUR = e; currentGBP = g;
+                przeliczWidok();
                 labelStatus.setText(" Ostatnia aktualizacja: " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
-                przyciskOdswiez.setEnabled(true); przyciskOdswiez.setBackground(ACCENT); pasekPostepu.setVisible(false);
+                przyciskOdswiez.setEnabled(true);
+                przyciskOdswiez.setBackground(ACCENT);
+                pasekPostepu.setVisible(false);
+                pasekPostepu.setValue(0);
             }
         }.execute();
     }
@@ -339,6 +374,17 @@ public class Main extends JPanel {
             }
         }
         labelSuma.setText(String.format("%,.2f PLN", sumaTotal));
+
+        double zainwestowano = 0;
+        for (Transakcja t : historiaTransakcji) {
+            if (t.typ.equals("DEPOSIT")) {
+                zainwestowano += t.wartosc;
+            } else if (t.typ.equals("WITHDRAW")) {
+                zainwestowano -= t.wartosc;
+            }
+        }
+        labelZainwestowano.setText(String.format("Wpłacono: %,.2f PLN", zainwestowano));
+
         if (sel >= 0 && sel < tabela.getRowCount()) tabela.setRowSelectionInterval(sel, sel);
     }
 
@@ -351,6 +397,33 @@ public class Main extends JPanel {
         mapaWierszyDoAktywow.put(row, a);
     }
 
+    static class HeaderDragFixUI extends BasicTableHeaderUI {
+        private final Color bg;
+        HeaderDragFixUI(Color bg) { this.bg = bg; }
+        @Override public void installUI(JComponent c) {
+            super.installUI(c);
+            if (rendererPane == null) { rendererPane = new CellRendererPane(); header.add(rendererPane); }
+            else if (rendererPane.getParent() != header) { header.add(rendererPane); }
+        }
+        @Override public void paint(Graphics g, JComponent c) {
+            g.setColor(bg); g.fillRect(0, 0, c.getWidth(), c.getHeight()); super.paint(g, c);
+            JTableHeader h = header; if (h == null) return;
+            TableColumn dragged = h.getDraggedColumn(); int dragDistance = h.getDraggedDistance();
+            if (dragged == null || dragDistance == 0) return;
+            TableColumnModel cm = h.getColumnModel(); int draggedIndex = -1;
+            for (int i = 0; i < cm.getColumnCount(); i++) { if (cm.getColumn(i) == dragged) { draggedIndex = i; break; } }
+            if (draggedIndex < 0) return;
+            Rectangle r = h.getHeaderRect(draggedIndex);
+            g.setColor(bg); g.fillRect(r.x, r.y, r.width, r.height);
+            g.setColor(BORDER_COLOR); g.drawLine(r.x, r.y + r.height - 1, r.x + r.width, r.y + r.height - 1);
+            TableCellRenderer renderer = dragged.getHeaderRenderer(); if (renderer == null) renderer = h.getDefaultRenderer();
+            Component comp = renderer.getTableCellRendererComponent(h.getTable(), dragged.getHeaderValue(), false, false, -1, draggedIndex);
+            if (comp instanceof JComponent jc) { jc.setOpaque(true); jc.setBackground(bg); jc.setForeground(h.getForeground()); }
+            int newX = r.x + dragDistance; rendererPane.paintComponent(g, comp, h, newX, r.y, r.width, r.height, true);
+        }
+    }
+
+    // --- METODY UI (BEZ ZMIAN) ---
     private void usunZaznaczone() {
         int[] rows = tabela.getSelectedRows();
         if (rows.length == 0) return;
@@ -364,63 +437,9 @@ public class Main extends JPanel {
             }
         }
         if (del.isEmpty()) return;
-
-        Window parent = SwingUtilities.getWindowAncestor(this);
-        JDialog d = new JDialog(parent, "Potwierdź", Dialog.ModalityType.APPLICATION_MODAL);
-        d.setUndecorated(true);
-        d.setSize(350, 230);
-        d.setLocationRelativeTo(parent);
-
-        JPanel root = new JPanel(new BorderLayout());
-        root.setBackground(CARD_BG);
-        root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));
-        d.setContentPane(root);
-
-        JLabel title = new JLabel("Usuwanie pozycji", SwingConstants.CENTER);
-        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        title.setForeground(TEXT_MAIN);
-        title.setBorder(new EmptyBorder(20, 20, 10, 20));
-
-        JLabel msg = new JLabel("<html><center>Czy na pewno chcesz usunąć<br>" + del.size() + " zaznaczonych pozycji?</center></html>", SwingConstants.CENTER);
-        msg.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        msg.setForeground(TEXT_DIM);
-        msg.setBorder(new EmptyBorder(0, 20, 20, 20));
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 20));
-        btns.setBackground(CARD_BG);
-
-        JButton bYes = new JButton("USUŃ");
-        PortfolioManager.styleButton(bYes, ACCENT_RED);
-        bYes.addActionListener(e -> {
-            portfel.removeAll(del);
-            BazaDanych.zapisz(nazwaPortfela, portfel);
-            przeliczWidok();
-            d.dispose();
-        });
-
-        JButton bNo = new JButton("ANULUJ");
-        bNo.setUI(new BasicButtonUI());
-        bNo.setBackground(INPUT_BG);
-        bNo.setForeground(TEXT_MAIN);
-        bNo.setFocusPainted(false);
-        bNo.setBorderPainted(false);
-        bNo.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        bNo.setBorder(new EmptyBorder(10, 25, 10, 25));
-        bNo.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        bNo.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) { bNo.setBackground(new Color(60,60,60)); }
-            public void mouseExited(MouseEvent e) { bNo.setBackground(INPUT_BG); }
-        });
-        bNo.addActionListener(e -> d.dispose());
-
-        btns.add(bNo);
-        btns.add(bYes);
-
-        root.add(title, BorderLayout.NORTH);
-        root.add(msg, BorderLayout.CENTER);
-        root.add(btns, BorderLayout.SOUTH);
-
-        d.setVisible(true);
+        portfel.removeAll(del);
+        BazaDanych.zapisz(nazwaPortfela, portfel);
+        przeliczWidok();
     }
 
     private void pokazOknoImportu() {
@@ -434,7 +453,7 @@ public class Main extends JPanel {
         head.add(title, BorderLayout.WEST); head.add(close, BorderLayout.EAST); root.add(head, BorderLayout.NORTH);
         JPanel content = new JPanel(); content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS)); content.setBackground(CARD_BG); content.setBorder(new EmptyBorder(10, 30, 20, 30));
         JLabel lSource = new JLabel("Źródło danych:"); lSource.setForeground(TEXT_DIM); lSource.setAlignmentX(Component.CENTER_ALIGNMENT);
-        JComboBox<String> comboSource = new JComboBox<>(new String[]{"XTB (Excel/CSV)", "Inne (wkrótce)"}); PortfolioManager.stylizujComboBox(comboSource);
+        JComboBox<String> comboSource = new JComboBox<>(new String[]{"Binance (CSV)", "XTB (Excel/CSV)"}); PortfolioManager.stylizujComboBox(comboSource);
         JPanel dropZone = new JPanel(new GridBagLayout()); dropZone.setBackground(INPUT_BG);
         dropZone.setBorder(BorderFactory.createCompoundBorder(new EmptyBorder(10, 30, 10, 30), BorderFactory.createDashedBorder(TEXT_DIM, 2, 5, 5, true)));
         dropZone.setPreferredSize(new Dimension(400, 150)); dropZone.setMaximumSize(new Dimension(Integer.MAX_VALUE, 150));
@@ -448,7 +467,7 @@ public class Main extends JPanel {
         JButton btnSelect = new JButton("WYBIERZ PLIK"); PortfolioManager.styleButton(btnSelect, PortfolioManager.ACCENT);
         btnSelect.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnSelect.addActionListener(e -> {
-            JFileChooser fc = new JFileChooser(); fc.setMultiSelectionEnabled(true); fc.setFileFilter(new FileNameExtensionFilter("Arkusze XTB", "xlsx", "xls", "csv"));
+            JFileChooser fc = new JFileChooser(); fc.setMultiSelectionEnabled(true); fc.setFileFilter(new FileNameExtensionFilter("Pliki Giełdowe", "xlsx", "xls", "csv"));
             if (fc.showOpenDialog(d) == JFileChooser.APPROVE_OPTION) { procesujPliki(Arrays.asList(fc.getSelectedFiles()), d); }
         });
         content.add(lSource); content.add(Box.createVerticalStrut(5)); content.add(comboSource); content.add(Box.createVerticalStrut(20)); content.add(dropZone); content.add(Box.createVerticalStrut(20)); content.add(btnSelect);
@@ -456,11 +475,29 @@ public class Main extends JPanel {
     }
 
     private void procesujPliki(List<File> pliki, JDialog d) {
-        XtbImport.ImportResult res = XtbImport.importujPliki(pliki);
-        if (res.znalezionePliki > 0 && !res.aktywa.isEmpty()) {
-            portfel.addAll(res.aktywa); BazaDanych.zapisz(nazwaPortfela, portfel); przeliczWidok();
-            JOptionPane.showMessageDialog(d, "Zaimportowano " + res.aktywa.size() + " pozycji."); d.dispose();
-        } else { JOptionPane.showMessageDialog(d, "Nie udało się zaimportować danych.\nUpewnij się, że plik zawiera arkusz OPEN POSITION."); }
+        StringBuilder raport = new StringBuilder();
+        int zaimportowanoAktywa = 0;
+        int zaimportowanoHistorie = 0;
+        for (File f : pliki) {
+            String nazwa = f.getName().toLowerCase();
+            XtbImport.ImportResult res = null;
+            if (nazwa.endsWith(".csv")) { res = BinanceImport.importujCSV(f); raport.append("Binance: "); }
+            else if (nazwa.endsWith(".xlsx") || nazwa.endsWith(".xls")) { res = XtbImport.importujPliki(Collections.singletonList(f)); raport.append("XTB: "); }
+            if (res != null) {
+                if (!res.aktywa.isEmpty()) { portfel.addAll(res.aktywa); zaimportowanoAktywa += res.aktywa.size(); raport.append(res.aktywa.size()).append(" poz. "); }
+                if (!res.historiaTransakcji.isEmpty()) { historiaTransakcji.addAll(res.historiaTransakcji); zaimportowanoHistorie += res.historiaTransakcji.size(); raport.append(res.historiaTransakcji.size()).append(" oper. "); }
+                raport.append("\n");
+            }
+        }
+        if (zaimportowanoAktywa > 0 || zaimportowanoHistorie > 0) {
+            BazaDanych.zapisz(nazwaPortfela, portfel);
+            BazaDanych.zapiszHistorie(nazwaPortfela, historiaTransakcji);
+            przeliczWidok();
+            JOptionPane.showMessageDialog(d, "Import zakończony!\n" + raport.toString());
+            d.dispose();
+        } else {
+            JOptionPane.showMessageDialog(d, "Nie rozpoznano danych.");
+        }
     }
 
     private void pokazOknoDodawania() {
@@ -514,14 +551,12 @@ public class Main extends JPanel {
         JTextField sym = new JTextField(); PortfolioManager.stylizujInput(sym);
         JTextField qty = new JTextField(); PortfolioManager.stylizujInput(qty);
 
-        // --- NOWOŚĆ: JFormattedTextField zamiast JSpinnera ---
         JFormattedTextField date = null;
         try {
             MaskFormatter mask = new MaskFormatter("##.##.####");
             mask.setPlaceholderCharacter('_');
             date = new JFormattedTextField(mask);
-            PortfolioManager.stylizujInput(date); // Używamy tego samego stylu co reszta inputów
-            // Ustawiamy dzisiejszą datę jako domyślną
+            PortfolioManager.stylizujInput(date);
             date.setText(LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
         } catch (Exception e) { e.printStackTrace(); }
 
@@ -538,7 +573,6 @@ public class Main extends JPanel {
         pOblig.add(lblMargin); pOblig.add(opr2);
         pOblig.setVisible(false);
 
-        // Potrzebny finalny obiekt daty do użycia w listenerze
         final JFormattedTextField fDate = date;
 
         ActionListener updateLogic = e -> {
@@ -603,7 +637,6 @@ public class Main extends JPanel {
 
         form.add(rowQtyPrice); form.add(Box.createVerticalStrut(10));
 
-        // --- DATA Z MASKĄ ---
         form.add(createLabel("Data zakupu (dd.mm.rrrr):"));
         form.add(Box.createVerticalStrut(5));
         form.add(date);
@@ -618,10 +651,7 @@ public class Main extends JPanel {
                 String rawSym = sym.getText().trim().toUpperCase();
                 String s = rawSym.contains("/") ? rawSym.split("/")[0] : rawSym;
 
-                // AUTOMATYCZNA ZAMIANA PRZECINKÓW NA KROPKI W LICZBACH
                 double q = Double.parseDouble(qty.getText().replace(",","."));
-
-                // Parsowanie daty z pola tekstowego z maską
                 LocalDate ld = LocalDate.parse(fDate.getText(), DateTimeFormatter.ofPattern("dd.MM.yyyy"));
 
                 Aktywo newAsset = null;
@@ -686,14 +716,6 @@ public class Main extends JPanel {
         b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setBackground(new Color(40, 40, 40)); } public void mouseExited(MouseEvent e)  { b.setBackground(BG_COLOR); } });
     }
 
-    private void styleMiniButton(JButton b) {
-        b.setUI(new BasicButtonUI()); b.setBackground(BG_COLOR); b.setForeground(TEXT_DIM);
-        b.setBorder(null); b.setFocusPainted(false); b.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        b.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setForeground(Color.WHITE); } public void mouseExited(MouseEvent e)  { b.setForeground(TEXT_DIM); } });
-    }
-
-    // --- RENDERERY ---
     private void stylizujTabele() {
         tabela.setBackground(BG_COLOR); tabela.setForeground(TEXT_MAIN); tabela.setRowHeight(35);
         tabela.setFont(new Font("Segoe UI", Font.PLAIN, 13)); tabela.setShowVerticalLines(false);

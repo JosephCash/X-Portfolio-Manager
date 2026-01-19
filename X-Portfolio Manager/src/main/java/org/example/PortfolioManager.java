@@ -9,6 +9,7 @@ import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
 import java.awt.event.*;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,6 @@ public class PortfolioManager extends JFrame {
 
     private String selectedIconTemp = "wallet.png";
 
-    // Mapa do szybkiej aktualizacji etykiet
     private final Map<String, JLabel> valueLabelsMap = new ConcurrentHashMap<>();
     private final Map<String, JLabel> infoLabelsMap = new ConcurrentHashMap<>();
 
@@ -214,17 +214,36 @@ public class PortfolioManager extends JFrame {
 
         JPanel footer = new JPanel(new BorderLayout()); footer.setBackground(CARD_BG);
         footer.setBorder(new EmptyBorder(20, 40, 20, 40));
-        footer.setPreferredSize(new Dimension(0, 100)); // Stała wysokość
+        footer.setPreferredSize(new Dimension(0, 100));
 
         JPanel sumPanel = new JPanel(new GridLayout(2, 1)); sumPanel.setOpaque(false);
         JLabel l1 = new JLabel("Majątek Całkowity:"); l1.setForeground(TEXT_DIM); l1.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         labelTotal = new JLabel("..."); labelTotal.setForeground(ACCENT); labelTotal.setFont(new Font("Segoe UI", Font.BOLD, 28));
         sumPanel.add(l1); sumPanel.add(labelTotal);
 
-        JButton btnAdd = new JButton("+ NOWY PORTFEL"); styleButton(btnAdd, ACCENT);
+        // --- PRZYCISKI W STOPCE ---
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        btnPanel.setOpaque(false);
+
+        // Przycisk Czyszczenia Cache
+        JButton btnClear = new JButton("WYCZYŚĆ CACHE");
+        styleButton(btnClear, BORDER_COLOR);
+        btnClear.setForeground(TEXT_DIM);
+        btnClear.addActionListener(e -> {
+            MarketData.wyczyscCache();
+            JOptionPane.showMessageDialog(this, "Pamięć cen została wyczyszczona.\nOdśwież dashboard lub wejdź w portfel, aby pobrać nowe ceny.");
+            odswiezDashboard();
+        });
+
+        JButton btnAdd = new JButton("+ NOWY PORTFEL");
+        styleButton(btnAdd, ACCENT);
         btnAdd.addActionListener(e -> pokazOknoEdycjiPortfela(null));
 
-        footer.add(sumPanel, BorderLayout.WEST); footer.add(btnAdd, BorderLayout.EAST);
+        btnPanel.add(btnClear);
+        btnPanel.add(btnAdd);
+
+        footer.add(sumPanel, BorderLayout.WEST);
+        footer.add(btnPanel, BorderLayout.EAST);
         dashboardPanel.add(footer, BorderLayout.SOUTH);
     }
 
@@ -238,20 +257,33 @@ public class PortfolioManager extends JFrame {
 
         new SwingWorker<Double, Void>() {
             @Override protected Double doInBackground() {
-                double sumaTotal = 0;
-                double u = MarketData.pobierzKursUSD(); double e = MarketData.pobierzKursEUR(); double g = MarketData.pobierzKursGBP();
-                for (String pName : portfele) {
+                // Pobieramy waluty raz
+                double u = MarketData.pobierzKursUSD();
+                double e = MarketData.pobierzKursEUR();
+                double g = MarketData.pobierzKursGBP();
+
+                // Obliczamy sumy RÓWNOLEGLE dla wszystkich portfeli naraz
+                return portfele.parallelStream().mapToDouble(pName -> {
                     List<Aktywo> aktywa = BazaDanych.wczytaj(pName);
-                    double w = 0;
-                    for (Aktywo a : aktywa) w += a.getWartoscPLN(u, e, g);
-                    double finalW = w; int count = aktywa.size();
-                    SwingUtilities.invokeLater(() -> zaktualizujKarte(pName, finalW, count));
-                    sumaTotal += w;
-                }
-                return sumaTotal;
+
+                    // Wewnątrz portfela też liczymy równolegle
+                    double w = aktywa.parallelStream()
+                            .mapToDouble(a -> a.getWartoscPLN(u, e, g))
+                            .sum();
+
+                    int count = aktywa.size();
+                    SwingUtilities.invokeLater(() -> zaktualizujKarte(pName, w, count));
+                    return w;
+                }).sum();
             }
             @Override protected void done() { try { labelTotal.setText(String.format("%,.2f PLN", get())); } catch (Exception e) {} }
         }.execute();
+    }
+
+    public void resetPortfolio(String nazwaPortfela) {
+        BazaDanych.zapisz(nazwaPortfela, new ArrayList<>());
+        BazaDanych.zapiszHistorie(nazwaPortfela, new ArrayList<>());
+        odswiezDashboard();
     }
 
     private void dodajKarteUI(String nazwa) {
@@ -271,13 +303,26 @@ public class PortfolioManager extends JFrame {
 
         JPopupMenu popup = new JPopupMenu(); stylePopupMenu(popup);
         JMenuItem itemEdit = new JMenuItem("Edytuj"); styleMenuItem(itemEdit);
+
+        JMenuItem itemReset = new JMenuItem("Resetuj"); styleMenuItem(itemReset);
+        itemReset.addActionListener(e -> {
+            int c = JOptionPane.showConfirmDialog(this, "Czy na pewno chcesz wyzerować portfel '" + nazwa + "'?\nStracisz wszystkie dane.", "Reset", JOptionPane.YES_NO_OPTION);
+            if(c == JOptionPane.YES_OPTION) {
+                resetPortfolio(nazwa);
+            }
+        });
+
         JMenuItem itemDelete = new JMenuItem("Usuń"); styleMenuItem(itemDelete);
         itemEdit.addActionListener(e -> pokazOknoEdycjiPortfela(nazwa));
         itemDelete.addActionListener(e -> {
             int c = JOptionPane.showConfirmDialog(this, "Usunąć portfel '" + nazwa + "'?", "Potwierdź", JOptionPane.YES_NO_OPTION);
             if (c == JOptionPane.YES_OPTION) { BazaDanych.usunPortfel(nazwa); odswiezDashboard(); }
         });
-        popup.add(itemEdit); popup.add(new JSeparator()); popup.add(itemDelete);
+
+        popup.add(itemEdit);
+        popup.add(itemReset);
+        // USUNIĘTO SEPARATOR TUTAJ
+        popup.add(itemDelete);
 
         MouseAdapter mouseHandler = new MouseAdapter() {
             public void mouseReleased(MouseEvent e) { check(e); } public void mousePressed(MouseEvent e) { check(e); }
@@ -305,7 +350,6 @@ public class PortfolioManager extends JFrame {
         root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
         d.setContentPane(root);
 
-        // --- GÓRNY PASEK (NAGŁÓWEK) ---
         JPanel head = new JPanel(new BorderLayout());
         head.setBackground(CARD_BG);
         head.setBorder(new EmptyBorder(15,20,15,20));
@@ -322,7 +366,6 @@ public class PortfolioManager extends JFrame {
         head.add(close, BorderLayout.EAST);
         root.add(head, BorderLayout.NORTH);
 
-        // --- FORMULARZ ---
         JPanel form = new JPanel();
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
         form.setBackground(CARD_BG);
@@ -332,7 +375,6 @@ public class PortfolioManager extends JFrame {
         stylizujInput(tfName);
         tfName.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // --- PANEL IKON ---
         JPanel iconPanel = new JPanel(new GridLayout(2, 2, 20, 20));
         iconPanel.setOpaque(false);
         iconPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -525,8 +567,6 @@ public class PortfolioManager extends JFrame {
             tf.setForeground(TEXT_MAIN);
             tf.setCaretColor(TEXT_MAIN);
             tf.setBorder(new EmptyBorder(0, 5, 0, 0));
-
-            // --- FIX: WYRÓWNANIE DO LEWEJ ---
             tf.setHorizontalAlignment(JTextField.LEFT);
         }
 
@@ -546,7 +586,6 @@ public class PortfolioManager extends JFrame {
                     public void mouseExited(MouseEvent e) { b.setForeground(TEXT_DIM); }
                 });
 
-                // --- FIX: DZIAŁAJĄCE STRZAŁKI ---
                 b.addActionListener(e -> {
                     try {
                         Object val = (direction > 0) ? spinner.getNextValue() : spinner.getPreviousValue();

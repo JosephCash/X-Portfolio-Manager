@@ -26,7 +26,6 @@ public class BazaDanych {
 
                 if (marker.equals("OBL_SKARB")) {
                     String sym = parts[1];
-                    // ODCZYTUJEMY TYP Z PLIKU (żeby pamiętać wybór usera)
                     TypAktywa typZPliku = null;
                     try { typZPliku = TypAktywa.valueOf(parts[2]); } catch(Exception e) {}
 
@@ -42,8 +41,6 @@ public class BazaDanych {
                     if (parts.length > 7 && !parts[7].isEmpty()) {
                         try { mMargin = Double.parseDouble(parts[7]); } catch(Exception e) {}
                     }
-
-                    // Przekazujemy typZPliku do konstruktora
                     lista.add(new ObligacjaSkarbowa(sym, typZPliku, ilosc, data, mRate, mMargin));
                 }
                 else if (marker.equals("AKCJA_PL") || marker.equals("AKCJA_USA") || marker.equals("KRYPTO")) {
@@ -60,7 +57,6 @@ public class BazaDanych {
                         System.err.println("Błąd wczytywania aktywa: " + line);
                     }
                 }
-                // Kompatybilność wsteczna
                 else if (marker.equals("OBL_STALA")) {
                     lista.add(new ObligacjaSkarbowa(parts[1], TypAktywa.OBLIGACJA_STALA, Double.parseDouble(parts[3]), parts[4], null, null));
                 }
@@ -107,11 +103,15 @@ public class BazaDanych {
     public static void utworzPortfel(String nazwa) {
         zapisz(nazwa, new ArrayList<>());
         ustawIkone(nazwa, "wallet.png");
+        // Tworzymy też pusty plik historii
+        zapiszHistorie(nazwa, new ArrayList<>());
     }
 
     public static void usunPortfel(String nazwa) {
         File f = new File(FOLDER_NAME + File.separator + "portfel_" + nazwa + ".txt");
         if (f.exists()) f.delete();
+        File fh = new File(FOLDER_NAME + File.separator + "historia_" + nazwa + ".txt");
+        if (fh.exists()) fh.delete();
         usunIkone(nazwa);
     }
 
@@ -120,6 +120,12 @@ public class BazaDanych {
         File nowy = new File(FOLDER_NAME + File.separator + "portfel_" + nowaNazwa + ".txt");
         if (stary.exists()) {
             stary.renameTo(nowy);
+
+            // Zmiana nazwy historii
+            File staryH = new File(FOLDER_NAME + File.separator + "historia_" + staraNazwa + ".txt");
+            File nowyH = new File(FOLDER_NAME + File.separator + "historia_" + nowaNazwa + ".txt");
+            if (staryH.exists()) staryH.renameTo(nowyH);
+
             String icon = pobierzIkone(staraNazwa);
             usunIkone(staraNazwa);
             ustawIkone(nowaNazwa, icon);
@@ -159,6 +165,38 @@ public class BazaDanych {
         if (!folder.exists()) folder.mkdir();
         try (FileOutputStream out = new FileOutputStream(FOLDER_NAME + File.separator + ICONS_FILE)) {
             props.store(out, "Konfiguracja ikon portfeli");
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    // --- NOWE METODY DO OBSŁUGI HISTORII ---
+
+    public static List<Transakcja> wczytajHistorie(String nazwaPortfela) {
+        List<Transakcja> lista = new ArrayList<>();
+        File file = new File(FOLDER_NAME + File.separator + "historia_" + nazwaPortfela + ".txt");
+        if (!file.exists()) return lista;
+
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split(";");
+                if (parts.length < 6) continue;
+                // data, typ, symbol, ilosc, wartosc, waluta
+                lista.add(new Transakcja(parts[0], parts[1], parts[2], Double.parseDouble(parts[3]), Double.parseDouble(parts[4]), parts[5]));
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return lista;
+    }
+
+    public static void zapiszHistorie(String nazwaPortfela, List<Transakcja> historia) {
+        File folder = new File(FOLDER_NAME);
+        if (!folder.exists()) folder.mkdir();
+
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(FOLDER_NAME + File.separator + "historia_" + nazwaPortfela + ".txt"))) {
+            for (Transakcja t : historia) {
+                bw.write(t.toCSV());
+                bw.newLine();
+            }
         } catch (IOException e) { e.printStackTrace(); }
     }
 }
