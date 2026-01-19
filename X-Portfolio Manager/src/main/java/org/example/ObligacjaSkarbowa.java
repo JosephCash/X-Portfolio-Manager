@@ -28,6 +28,23 @@ public class ObligacjaSkarbowa extends Aktywo {
         return TypAktywa.OBLIGACJA_STALA;
     }
 
+    // --- NOWA METODA DO NAPRAWIENIA BŁĘDU ---
+    public double getAktualneOprocentowanie() {
+        // 1. Jeśli użytkownik podał ręcznie, zwróć to
+        if (manualRate != null) return manualRate;
+
+        // 2. Jeśli nie, spróbuj pobrać z bazy definicji (np. dla EDO/COI)
+        try {
+            SeriesDefinition def = SeriesRepository.getDefinition(this.symbol);
+            if (def != null && def.firstPeriodRate != null) {
+                return def.firstPeriodRate.doubleValue();
+            }
+        } catch (Exception e) {
+            // Ignoruj błędy jeśli serii nie ma w bazie
+        }
+        return 0.0;
+    }
+
     @Override
     public double getCenaJednostkowa() {
         SeriesDefinition def = SeriesRepository.getDefinition(this.symbol);

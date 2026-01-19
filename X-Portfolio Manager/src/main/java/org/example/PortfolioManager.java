@@ -17,19 +17,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class PortfolioManager extends JFrame {
 
-    // --- STAŁE KOLORYSTYCZNE ---
     public static final Color BG_COLOR = new Color(18, 18, 18);
     public static final Color CARD_BG = new Color(30, 30, 30);
     public static final Color INPUT_BG = new Color(45, 45, 45);
     public static final Color CARD_HOVER = new Color(45, 45, 45);
     public static final Color ACCENT = new Color(39, 174, 96);
     public static final Color ACCENT_RED = new Color(192, 57, 43);
-    public static final Color BLUE = new Color(41, 128, 185);
     public static final Color TEXT_MAIN = new Color(220, 220, 220);
     public static final Color TEXT_DIM = new Color(150, 150, 150);
     public static final Color BORDER_COLOR = new Color(60, 60, 60);
     public static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 24);
     public static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 14);
+
+    public static final int YES_OPTION = 0;
+    public static final int NO_OPTION = 1;
 
     private JPanel mainContainer;
     private CardLayout cardLayout;
@@ -72,22 +73,16 @@ public class PortfolioManager extends JFrame {
         centerPanel.setBackground(BG_COLOR);
         centerPanel.setBorder(new EmptyBorder(30, 0, 20, 0));
 
+        // 1. TYTUŁ NA SAMEJ GÓRZE
         JLabel title = new JLabel("X-Portfolio Manager");
         title.setFont(new Font("Segoe UI", Font.BOLD, 26));
         title.setForeground(TEXT_MAIN);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel sub = new JLabel("Twoje centrum inwestycyjne");
-        sub.setFont(FONT_NORMAL);
-        sub.setForeground(TEXT_DIM);
-        sub.setAlignmentX(Component.CENTER_ALIGNMENT);
-
         centerPanel.add(title);
-        centerPanel.add(Box.createVerticalStrut(5));
-        centerPanel.add(sub);
 
-        centerPanel.add(Box.createVerticalStrut(25));
+        centerPanel.add(Box.createVerticalStrut(20)); // Odstęp
 
+        // 2. IKONA POŚRODKU
         ImageIcon logoIcon = loadIcon("app_icon.png", 80);
         if (logoIcon != null) {
             JLabel lLogo = new JLabel(logoIcon);
@@ -95,6 +90,18 @@ public class PortfolioManager extends JFrame {
             centerPanel.add(lLogo);
         }
 
+        centerPanel.add(Box.createVerticalStrut(10)); // Odstęp
+
+        // 3. NAPIS POD IKONĄ
+        JLabel sub = new JLabel("Twoje centrum inwestycyjne");
+        sub.setFont(FONT_NORMAL);
+        sub.setForeground(TEXT_DIM);
+        sub.setAlignmentX(Component.CENTER_ALIGNMENT);
+        centerPanel.add(sub);
+
+        centerPanel.add(Box.createVerticalStrut(25));
+
+        // Pasek postępu
         JLabel stat = new JLabel("Inicjalizacja...", SwingConstants.CENTER);
         stat.setForeground(TEXT_DIM);
         stat.setFont(new Font("Segoe UI", Font.PLAIN, 12));
@@ -143,6 +150,72 @@ public class PortfolioManager extends JFrame {
         }.execute();
     }
 
+    // --- POPRAWIONE DIALOGI ---
+    public static int showCustomConfirmDialog(Component parent, String message, String title) {
+        JDialog d = new JDialog(SwingUtilities.getWindowAncestor(parent), title, Dialog.ModalityType.APPLICATION_MODAL);
+        d.setUndecorated(true);
+        d.setSize(350, 200);
+        d.setLocationRelativeTo(parent);
+
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(CARD_BG);
+        // ZMIANA: Szara ramka
+        root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));
+        d.setContentPane(root);
+
+        JLabel lblMsg = new JLabel("<html><center>" + message.replace("\n", "<br>") + "</center></html>", SwingConstants.CENTER);
+        lblMsg.setForeground(TEXT_MAIN);
+        lblMsg.setFont(FONT_NORMAL);
+        lblMsg.setBorder(new EmptyBorder(20, 20, 20, 20));
+        root.add(lblMsg, BorderLayout.CENTER);
+
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 20));
+        btnPanel.setBackground(CARD_BG);
+
+        JButton btnYes = new JButton("TAK");
+        styleButton(btnYes, ACCENT_RED);
+        btnYes.setPreferredSize(new Dimension(100, 35));
+
+        JButton btnNo = new JButton("ANULUJ");
+        styleButton(btnNo, BORDER_COLOR);
+        // ZMIANA: Szerszy przycisk anuluj
+        btnNo.setPreferredSize(new Dimension(120, 35));
+
+        final int[] result = {NO_OPTION};
+
+        btnYes.addActionListener(e -> { result[0] = YES_OPTION; d.dispose(); });
+        btnNo.addActionListener(e -> { result[0] = NO_OPTION; d.dispose(); });
+
+        btnPanel.add(btnYes);
+        btnPanel.add(btnNo);
+        root.add(btnPanel, BorderLayout.SOUTH);
+
+        d.setVisible(true);
+        return result[0];
+    }
+
+    // ... (reszta metod PortfolioManager - showCustomMessageDialog też z szarą ramką - poniżej skrócona wersja dla kompletności)
+
+    public static void showCustomMessageDialog(Component parent, String message, String title) {
+        JDialog d = new JDialog(SwingUtilities.getWindowAncestor(parent), title, Dialog.ModalityType.APPLICATION_MODAL);
+        d.setUndecorated(true);
+        d.setSize(350, 180);
+        d.setLocationRelativeTo(parent);
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(CARD_BG);
+        root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1)); // SZARA RAMKA
+        d.setContentPane(root);
+        JLabel lblMsg = new JLabel("<html><center>" + message.replace("\n", "<br>") + "</center></html>", SwingConstants.CENTER);
+        lblMsg.setForeground(TEXT_MAIN); lblMsg.setFont(FONT_NORMAL); lblMsg.setBorder(new EmptyBorder(20, 20, 20, 20));
+        root.add(lblMsg, BorderLayout.CENTER);
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 20)); btnPanel.setBackground(CARD_BG);
+        JButton btnOk = new JButton("OK"); styleButton(btnOk, ACCENT); btnOk.setPreferredSize(new Dimension(100, 35)); btnOk.addActionListener(e -> d.dispose());
+        btnPanel.add(btnOk); root.add(btnPanel, BorderLayout.SOUTH);
+        d.setVisible(true);
+    }
+
+    // ... (Konstruktor i reszta metod bez zmian logicznych, ale wymagane do działania klasy)
+
     public PortfolioManager() {
         setUndecorated(true);
         setSize(1100, 750);
@@ -150,329 +223,153 @@ public class PortfolioManager extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         getContentPane().setBackground(BG_COLOR);
         getRootPane().setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
-
         ImageIcon appIcon = loadIcon("app_icon.png", 512);
-        if (appIcon != null) {
-            setIconImage(appIcon.getImage());
-        }
-
+        if (appIcon != null) setIconImage(appIcon.getImage());
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(BG_COLOR);
         header.setBorder(new EmptyBorder(10, 10, 10, 10));
-
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         titlePanel.setOpaque(false);
-
         ImageIcon smallIcon = loadIcon("app_icon.png", 20);
-        if (smallIcon != null) {
-            titlePanel.add(new JLabel(smallIcon));
-        }
-
+        if (smallIcon != null) titlePanel.add(new JLabel(smallIcon));
         JLabel appTitle = new JLabel("X-Portfolio Manager");
         appTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
         appTitle.setForeground(TEXT_DIM);
         titlePanel.add(appTitle);
-
-        JPanel controls = new JPanel(new GridLayout(1, 2, 5, 0));
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         controls.setOpaque(false);
+        JButton btnSettings = new JButton();
+        btnSettings.setUI(new BasicButtonUI());
+        btnSettings.setBorder(null);
+        btnSettings.setBackground(BG_COLOR);
+        btnSettings.setPreferredSize(new Dimension(30, 30));
+        btnSettings.setFocusPainted(false);
+        ImageIcon iconSettings = loadIcon("settings.png", 20);
+        ImageIcon iconSettingsW = loadIcon("settings_w.png", 20);
+        btnSettings.setIcon(iconSettings);
+        btnSettings.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnSettings.addActionListener(e -> pokazOknoUstawien());
+        btnSettings.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) { btnSettings.setIcon(iconSettingsW); }
+            public void mouseExited(MouseEvent e) { btnSettings.setIcon(iconSettings); }
+        });
         JButton btnMin = createWinButton("_", false); btnMin.addActionListener(e -> setState(Frame.ICONIFIED));
         JButton btnClose = createWinButton("X", true); btnClose.addActionListener(e -> System.exit(0));
-        controls.add(btnMin); controls.add(btnClose);
-
-        header.add(titlePanel, BorderLayout.WEST);
-        header.add(controls, BorderLayout.EAST);
-
-        MouseAdapter ma = new MouseAdapter() {
-            public void mousePressed(MouseEvent me) { pX = me.getX(); pY = me.getY(); }
-            public void mouseDragged(MouseEvent me) { setLocation(getLocation().x + me.getX() - pX, getLocation().y + me.getY() - pY); }
-        };
+        controls.add(btnSettings); controls.add(btnMin); controls.add(btnClose);
+        header.add(titlePanel, BorderLayout.WEST); header.add(controls, BorderLayout.EAST);
+        MouseAdapter ma = new MouseAdapter() { public void mousePressed(MouseEvent me) { pX = me.getX(); pY = me.getY(); } public void mouseDragged(MouseEvent me) { setLocation(getLocation().x + me.getX() - pX, getLocation().y + me.getY() - pY); } };
         header.addMouseListener(ma); header.addMouseMotionListener(ma);
         add(header, BorderLayout.NORTH);
-
         cardLayout = new CardLayout(); mainContainer = new JPanel(cardLayout); mainContainer.setBackground(BG_COLOR);
         initDashboard();
-        mainContainer.add(dashboardPanel, "DASHBOARD");
-        mainContainer.add(new JPanel(), "PORTFOLIO");
+        mainContainer.add(dashboardPanel, "DASHBOARD"); mainContainer.add(new JPanel(), "PORTFOLIO");
         add(mainContainer, BorderLayout.CENTER);
         odswiezDashboard();
     }
-
+    private void pokazOknoUstawien() {
+        JDialog d = new JDialog(this, "Ustawienia", Dialog.ModalityType.APPLICATION_MODAL);
+        d.setUndecorated(true); d.setSize(400, 300); d.setLocationRelativeTo(this);
+        JPanel root = new JPanel(new BorderLayout()); root.setBackground(CARD_BG); root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR)); d.setContentPane(root);
+        JPanel head = new JPanel(new BorderLayout()); head.setBackground(CARD_BG); head.setBorder(new EmptyBorder(15, 20, 15, 20));
+        JLabel title = new JLabel("Ustawienia"); title.setForeground(TEXT_MAIN); title.setFont(FONT_TITLE.deriveFont(20f));
+        JButton close = new JButton("X"); styleMiniActionBtn(close, TEXT_DIM); close.addActionListener(e -> d.dispose());
+        head.add(title, BorderLayout.WEST); head.add(close, BorderLayout.EAST); root.add(head, BorderLayout.NORTH);
+        JPanel content = new JPanel(); content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS)); content.setBackground(CARD_BG); content.setBorder(new EmptyBorder(20, 30, 20, 30));
+        JLabel lSection = new JLabel("Dane i Pamięć"); lSection.setForeground(ACCENT); lSection.setFont(new Font("Segoe UI", Font.BOLD, 14)); lSection.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JButton btnCache = new JButton("WYCZYŚĆ CACHE CEN"); styleButton(btnCache, BORDER_COLOR); btnCache.setForeground(TEXT_DIM); btnCache.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        btnCache.addActionListener(e -> { MarketData.wyczyscCache(); showCustomMessageDialog(d, "Pamięć cen została wyczyszczona.\nOdśwież portfele, aby pobrać nowe ceny.", "Cache Wyczyszczony"); odswiezDashboard(); });
+        content.add(lSection); content.add(Box.createVerticalStrut(10)); content.add(btnCache); content.add(Box.createVerticalGlue());
+        root.add(content, BorderLayout.CENTER); d.setVisible(true);
+    }
     private void initDashboard() {
         dashboardPanel = new JPanel(new BorderLayout()); dashboardPanel.setBackground(BG_COLOR);
-
-        JLabel lblTitle = new JLabel("Twoje Portfele", SwingConstants.LEFT);
-        lblTitle.setFont(FONT_TITLE); lblTitle.setForeground(TEXT_MAIN); lblTitle.setBorder(new EmptyBorder(20, 40, 20, 40));
-        dashboardPanel.add(lblTitle, BorderLayout.NORTH);
-
-        gridPanel = new JPanel(new GridLayout(0, 2, 20, 20));
-        gridPanel.setBackground(BG_COLOR);
-        gridPanel.setBorder(new EmptyBorder(0, 40, 0, 40));
-
+        JLabel lblTitle = new JLabel("Twoje Portfele", SwingConstants.LEFT); lblTitle.setFont(FONT_TITLE); lblTitle.setForeground(TEXT_MAIN); lblTitle.setBorder(new EmptyBorder(20, 40, 20, 40)); dashboardPanel.add(lblTitle, BorderLayout.NORTH);
+        gridPanel = new JPanel(new GridLayout(0, 2, 20, 20)); gridPanel.setBackground(BG_COLOR); gridPanel.setBorder(new EmptyBorder(0, 40, 0, 40));
         JPanel gridWrapper = new JPanel(new BorderLayout()); gridWrapper.setBackground(BG_COLOR); gridWrapper.add(gridPanel, BorderLayout.NORTH);
-        JScrollPane scroll = new JScrollPane(gridWrapper); scroll.setBorder(null); scroll.getViewport().setBackground(BG_COLOR); styleScrollPane(scroll);
-        dashboardPanel.add(scroll, BorderLayout.CENTER);
-
-        JPanel footer = new JPanel(new BorderLayout()); footer.setBackground(CARD_BG);
-        footer.setBorder(new EmptyBorder(20, 40, 20, 40));
-        footer.setPreferredSize(new Dimension(0, 100));
-
+        JScrollPane scroll = new JScrollPane(gridWrapper); scroll.setBorder(null); scroll.getViewport().setBackground(BG_COLOR); styleScrollPane(scroll); dashboardPanel.add(scroll, BorderLayout.CENTER);
+        JPanel footer = new JPanel(new BorderLayout()); footer.setBackground(CARD_BG); footer.setBorder(new EmptyBorder(20, 40, 20, 40)); footer.setPreferredSize(new Dimension(0, 100));
         JPanel sumPanel = new JPanel(new GridLayout(2, 1)); sumPanel.setOpaque(false);
         JLabel l1 = new JLabel("Majątek Całkowity:"); l1.setForeground(TEXT_DIM); l1.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        labelTotal = new JLabel("..."); labelTotal.setForeground(ACCENT); labelTotal.setFont(new Font("Segoe UI", Font.BOLD, 28));
-        sumPanel.add(l1); sumPanel.add(labelTotal);
-
-        // --- PRZYCISKI W STOPCE ---
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        btnPanel.setOpaque(false);
-
-        // Przycisk Czyszczenia Cache
-        JButton btnClear = new JButton("WYCZYŚĆ CACHE");
-        styleButton(btnClear, BORDER_COLOR);
-        btnClear.setForeground(TEXT_DIM);
-        btnClear.addActionListener(e -> {
-            MarketData.wyczyscCache();
-            JOptionPane.showMessageDialog(this, "Pamięć cen została wyczyszczona.\nOdśwież dashboard lub wejdź w portfel, aby pobrać nowe ceny.");
-            odswiezDashboard();
-        });
-
-        JButton btnAdd = new JButton("+ NOWY PORTFEL");
-        styleButton(btnAdd, ACCENT);
-        btnAdd.addActionListener(e -> pokazOknoEdycjiPortfela(null));
-
-        btnPanel.add(btnClear);
-        btnPanel.add(btnAdd);
-
-        footer.add(sumPanel, BorderLayout.WEST);
-        footer.add(btnPanel, BorderLayout.EAST);
-        dashboardPanel.add(footer, BorderLayout.SOUTH);
+        labelTotal = new JLabel("..."); labelTotal.setForeground(ACCENT); labelTotal.setFont(new Font("Segoe UI", Font.BOLD, 28)); sumPanel.add(l1); sumPanel.add(labelTotal);
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0)); btnPanel.setOpaque(false);
+        JButton btnAdd = new JButton("+ NOWY PORTFEL"); styleButton(btnAdd, ACCENT); btnAdd.addActionListener(e -> pokazOknoEdycjiPortfela(null)); btnPanel.add(btnAdd);
+        footer.add(sumPanel, BorderLayout.WEST); footer.add(btnPanel, BorderLayout.EAST); dashboardPanel.add(footer, BorderLayout.SOUTH);
     }
-
     public void odswiezDashboard() {
         gridPanel.removeAll(); valueLabelsMap.clear(); infoLabelsMap.clear();
         List<String> portfele = BazaDanych.pobierzNazwyPortfeli();
         if (portfele.isEmpty()) { BazaDanych.utworzPortfel("Główny"); portfele.add("Główny"); }
-
         for (String pName : portfele) dodajKarteUI(pName);
         gridPanel.revalidate(); gridPanel.repaint();
-
         new SwingWorker<Double, Void>() {
             @Override protected Double doInBackground() {
-                // Pobieramy waluty raz
-                double u = MarketData.pobierzKursUSD();
-                double e = MarketData.pobierzKursEUR();
-                double g = MarketData.pobierzKursGBP();
-
-                // Obliczamy sumy RÓWNOLEGLE dla wszystkich portfeli naraz
-                return portfele.parallelStream().mapToDouble(pName -> {
-                    List<Aktywo> aktywa = BazaDanych.wczytaj(pName);
-
-                    // Wewnątrz portfela też liczymy równolegle
-                    double w = aktywa.parallelStream()
-                            .mapToDouble(a -> a.getWartoscPLN(u, e, g))
-                            .sum();
-
-                    int count = aktywa.size();
-                    SwingUtilities.invokeLater(() -> zaktualizujKarte(pName, w, count));
-                    return w;
-                }).sum();
+                double u = MarketData.pobierzKursUSD(); double e = MarketData.pobierzKursEUR(); double g = MarketData.pobierzKursGBP();
+                return portfele.parallelStream().mapToDouble(pName -> { List<Aktywo> aktywa = BazaDanych.wczytaj(pName); double w = aktywa.parallelStream().mapToDouble(a -> a.getWartoscPLN(u, e, g)).sum(); int count = aktywa.size(); SwingUtilities.invokeLater(() -> zaktualizujKarte(pName, w, count)); return w; }).sum();
             }
             @Override protected void done() { try { labelTotal.setText(String.format("%,.2f PLN", get())); } catch (Exception e) {} }
         }.execute();
     }
-
-    public void resetPortfolio(String nazwaPortfela) {
-        BazaDanych.zapisz(nazwaPortfela, new ArrayList<>());
-        BazaDanych.zapiszHistorie(nazwaPortfela, new ArrayList<>());
-        odswiezDashboard();
-    }
-
+    public void resetPortfolio(String nazwaPortfela) { BazaDanych.zapisz(nazwaPortfela, new ArrayList<>()); BazaDanych.zapiszHistorie(nazwaPortfela, new ArrayList<>()); odswiezDashboard(); }
+    private void zaktualizujKarte(String nazwa, double wartosc, int ilosc) { if (valueLabelsMap.containsKey(nazwa)) valueLabelsMap.get(nazwa).setText(String.format("%,.2f zł", wartosc)); if (infoLabelsMap.containsKey(nazwa)) infoLabelsMap.get(nazwa).setText(ilosc + " pozycji"); }
     private void dodajKarteUI(String nazwa) {
-        JPanel card = new JPanel(new BorderLayout(15, 0)); card.setBackground(CARD_BG); card.setPreferredSize(new Dimension(0, 110));
-        card.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 15)); card.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        ImageIcon icon = loadIcon(BazaDanych.pobierzIkone(nazwa), 85);
-        JLabel lIcon = new JLabel(icon); lIcon.setVerticalAlignment(SwingConstants.CENTER);
-
+        JPanel card = new JPanel(new BorderLayout(15, 0)); card.setBackground(CARD_BG); card.setPreferredSize(new Dimension(0, 110)); card.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 15)); card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        ImageIcon icon = loadIcon(BazaDanych.pobierzIkone(nazwa), 85); JLabel lIcon = new JLabel(icon); lIcon.setVerticalAlignment(SwingConstants.CENTER);
         JPanel content = new JPanel(new GridLayout(3, 1)); content.setOpaque(false);
         JLabel lName = new JLabel(nazwa); lName.setFont(new Font("Segoe UI", Font.BOLD, 18)); lName.setForeground(TEXT_MAIN);
         JLabel lInfo = new JLabel("Wczytywanie..."); lInfo.setFont(new Font("Segoe UI", Font.PLAIN, 13)); lInfo.setForeground(TEXT_DIM);
         JLabel lVal = new JLabel("..."); lVal.setFont(new Font("Segoe UI", Font.BOLD, 22)); lVal.setForeground(ACCENT);
-        infoLabelsMap.put(nazwa, lInfo); valueLabelsMap.put(nazwa, lVal);
-        content.add(lName); content.add(lInfo); content.add(lVal);
-        card.add(lIcon, BorderLayout.WEST); card.add(content, BorderLayout.CENTER);
-
+        infoLabelsMap.put(nazwa, lInfo); valueLabelsMap.put(nazwa, lVal); content.add(lName); content.add(lInfo); content.add(lVal); card.add(lIcon, BorderLayout.WEST); card.add(content, BorderLayout.CENTER);
         JPopupMenu popup = new JPopupMenu(); stylePopupMenu(popup);
         JMenuItem itemEdit = new JMenuItem("Edytuj"); styleMenuItem(itemEdit);
-
         JMenuItem itemReset = new JMenuItem("Resetuj"); styleMenuItem(itemReset);
-        itemReset.addActionListener(e -> {
-            int c = JOptionPane.showConfirmDialog(this, "Czy na pewno chcesz wyzerować portfel '" + nazwa + "'?\nStracisz wszystkie dane.", "Reset", JOptionPane.YES_NO_OPTION);
-            if(c == JOptionPane.YES_OPTION) {
-                resetPortfolio(nazwa);
-            }
-        });
-
+        itemReset.addActionListener(e -> { int c = showCustomConfirmDialog(this, "Czy na pewno chcesz wyzerować portfel '" + nazwa + "'?\nStracisz wszystkie dane.", "Potwierdź Reset"); if(c == YES_OPTION) { resetPortfolio(nazwa); } });
         JMenuItem itemDelete = new JMenuItem("Usuń"); styleMenuItem(itemDelete);
         itemEdit.addActionListener(e -> pokazOknoEdycjiPortfela(nazwa));
-        itemDelete.addActionListener(e -> {
-            int c = JOptionPane.showConfirmDialog(this, "Usunąć portfel '" + nazwa + "'?", "Potwierdź", JOptionPane.YES_NO_OPTION);
-            if (c == JOptionPane.YES_OPTION) { BazaDanych.usunPortfel(nazwa); odswiezDashboard(); }
-        });
-
-        popup.add(itemEdit);
-        popup.add(itemReset);
-        // USUNIĘTO SEPARATOR TUTAJ
-        popup.add(itemDelete);
-
+        itemDelete.addActionListener(e -> { int c = showCustomConfirmDialog(this, "Usunąć portfel '" + nazwa + "'?", "Potwierdź Usunięcie"); if (c == YES_OPTION) { BazaDanych.usunPortfel(nazwa); odswiezDashboard(); } });
+        popup.add(itemEdit); popup.add(itemReset); popup.add(itemDelete);
         MouseAdapter mouseHandler = new MouseAdapter() {
             public void mouseReleased(MouseEvent e) { check(e); } public void mousePressed(MouseEvent e) { check(e); }
             private void check(MouseEvent e) { if (e.isPopupTrigger()) popup.show(e.getComponent(), e.getX(), e.getY()); else if (SwingUtilities.isLeftMouseButton(e) && e.getID() == MouseEvent.MOUSE_PRESSED) otworzPortfel(nazwa); }
             public void mouseEntered(MouseEvent e) { card.setBackground(CARD_HOVER); } public void mouseExited(MouseEvent e) { card.setBackground(CARD_BG); }
         };
-        card.addMouseListener(mouseHandler); lName.addMouseListener(mouseHandler); lInfo.addMouseListener(mouseHandler); lVal.addMouseListener(mouseHandler); lIcon.addMouseListener(mouseHandler);
-        gridPanel.add(card);
+        card.addMouseListener(mouseHandler); lName.addMouseListener(mouseHandler); lInfo.addMouseListener(mouseHandler); lVal.addMouseListener(mouseHandler); lIcon.addMouseListener(mouseHandler); gridPanel.add(card);
     }
-
-    private void zaktualizujKarte(String nazwa, double wartosc, int ilosc) {
-        if (valueLabelsMap.containsKey(nazwa)) valueLabelsMap.get(nazwa).setText(String.format("%,.2f zł", wartosc));
-        if (infoLabelsMap.containsKey(nazwa)) infoLabelsMap.get(nazwa).setText(ilosc + " pozycji");
-    }
-
     private void pokazOknoEdycjiPortfela(String staraNazwa) {
         boolean trybEdycji = (staraNazwa != null);
         JDialog d = new JDialog(this, trybEdycji ? "Edytuj Portfel" : "Nowy Portfel", Dialog.ModalityType.APPLICATION_MODAL);
-        d.setUndecorated(true);
-        d.setSize(400, 480);
-        d.setLocationRelativeTo(this);
-
-        JPanel root = new JPanel(new BorderLayout());
-        root.setBackground(CARD_BG);
-        root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
-        d.setContentPane(root);
-
-        JPanel head = new JPanel(new BorderLayout());
-        head.setBackground(CARD_BG);
-        head.setBorder(new EmptyBorder(15,20,15,20));
-
-        JLabel title = new JLabel(trybEdycji ? "Edytuj Portfel" : "Nowy Portfel");
-        title.setForeground(TEXT_MAIN);
-        title.setFont(FONT_TITLE.deriveFont(20f));
-
-        JButton close = new JButton("X");
-        styleMiniActionBtn(close, TEXT_DIM);
-        close.addActionListener(e -> d.dispose());
-
-        head.add(title, BorderLayout.WEST);
-        head.add(close, BorderLayout.EAST);
-        root.add(head, BorderLayout.NORTH);
-
-        JPanel form = new JPanel();
-        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        form.setBackground(CARD_BG);
-        form.setBorder(new EmptyBorder(10, 30, 20, 30));
-
-        JTextField tfName = new JTextField(trybEdycji ? staraNazwa : "");
-        stylizujInput(tfName);
-        tfName.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JPanel iconPanel = new JPanel(new GridLayout(2, 2, 20, 20));
-        iconPanel.setOpaque(false);
-        iconPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        String[] icons = {"wallet.png", "crypto.png", "stock.png", "bond.png"};
-        selectedIconTemp = trybEdycji ? BazaDanych.pobierzIkone(staraNazwa) : "wallet.png";
-
-        ButtonGroup bg = new ButtonGroup();
-
-        for(String ic : icons) {
-            JToggleButton btn = new JToggleButton();
-            btn.putClientProperty("baseIcon", ic);
-            btn.setBackground(INPUT_BG);
-            btn.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
-            btn.setFocusPainted(false);
-            btn.setContentAreaFilled(false);
-            btn.setOpaque(true);
-            btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-            if(ic.equals(selectedIconTemp)) {
-                btn.setSelected(true);
-                btn.setBackground(ACCENT);
-                btn.setIcon(loadIcon(ic.replace(".png", "_w.png"), 64));
-            } else {
-                btn.setBackground(INPUT_BG);
-                btn.setIcon(loadIcon(ic, 64));
-            }
-
+        d.setUndecorated(true); d.setSize(400, 520); d.setLocationRelativeTo(this);
+        JPanel root = new JPanel(new BorderLayout()); root.setBackground(CARD_BG); root.setBorder(BorderFactory.createLineBorder(BORDER_COLOR)); d.setContentPane(root);
+        JPanel head = new JPanel(new BorderLayout()); head.setBackground(CARD_BG); head.setBorder(new EmptyBorder(15,20,15,20));
+        JLabel title = new JLabel(trybEdycji ? "Edytuj Portfel" : "Nowy Portfel"); title.setForeground(TEXT_MAIN); title.setFont(FONT_TITLE.deriveFont(20f));
+        JButton close = new JButton("X"); styleMiniActionBtn(close, TEXT_DIM); close.addActionListener(e -> d.dispose());
+        head.add(title, BorderLayout.WEST); head.add(close, BorderLayout.EAST); root.add(head, BorderLayout.NORTH);
+        JPanel form = new JPanel(); form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS)); form.setBackground(CARD_BG); form.setBorder(new EmptyBorder(10, 30, 20, 30));
+        JTextField tfName = new JTextField(trybEdycji ? staraNazwa : ""); stylizujInput(tfName); tfName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JPanel iconPanel = new JPanel(new GridLayout(2, 2, 20, 10)); iconPanel.setOpaque(false); iconPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        String[] icons = {"stock.png", "crypto.png", "bond.png", "wallet.png"}; String[] labels = {"Akcje", "Krypto", "Obligacje", "Inne/Mix"};
+        selectedIconTemp = trybEdycji ? BazaDanych.pobierzIkone(staraNazwa) : "stock.png"; ButtonGroup bg = new ButtonGroup();
+        for(int i=0; i<icons.length; i++) {
+            String ic = icons[i]; String lbl = labels[i];
+            JPanel itemPanel = new JPanel(new BorderLayout()); itemPanel.setOpaque(false);
+            JToggleButton btn = new JToggleButton(); btn.putClientProperty("baseIcon", ic); btn.setBackground(INPUT_BG); btn.setBorder(BorderFactory.createLineBorder(BORDER_COLOR)); btn.setFocusPainted(false); btn.setContentAreaFilled(false); btn.setOpaque(true); btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            if(ic.equals(selectedIconTemp)) { btn.setSelected(true); btn.setBackground(ACCENT); btn.setIcon(loadIcon(ic.replace(".png", "_w.png"), 64)); } else { btn.setBackground(INPUT_BG); btn.setIcon(loadIcon(ic, 64)); }
             btn.addActionListener(e -> {
-                selectedIconTemp = ic;
-                Enumeration<AbstractButton> bs = bg.getElements();
-                while(bs.hasMoreElements()) {
-                    AbstractButton b = bs.nextElement();
-                    String base = (String) b.getClientProperty("baseIcon");
-                    if (b == btn) {
-                        b.setBackground(ACCENT);
-                        b.setIcon(loadIcon(base.replace(".png", "_w.png"), 64));
-                    } else {
-                        b.setBackground(INPUT_BG);
-                        b.setIcon(loadIcon(base, 64));
-                    }
-                }
+                selectedIconTemp = ic; Enumeration<AbstractButton> bs = bg.getElements();
+                while(bs.hasMoreElements()) { AbstractButton b = bs.nextElement(); String base = (String) b.getClientProperty("baseIcon"); if (b == btn) { b.setBackground(ACCENT); b.setIcon(loadIcon(base.replace(".png", "_w.png"), 64)); } else { b.setBackground(INPUT_BG); b.setIcon(loadIcon(base, 64)); } }
             });
-
-            bg.add(btn);
-            iconPanel.add(btn);
+            bg.add(btn); itemPanel.add(btn, BorderLayout.CENTER);
+            JLabel lDesc = new JLabel(lbl, SwingConstants.CENTER); lDesc.setForeground(TEXT_DIM); lDesc.setFont(new Font("Segoe UI", Font.PLAIN, 12)); lDesc.setBorder(new EmptyBorder(5,0,0,0)); itemPanel.add(lDesc, BorderLayout.SOUTH); iconPanel.add(itemPanel);
         }
-
-        form.add(createLabel("Nazwa portfela:"));
-        form.add(Box.createVerticalStrut(8));
-        form.add(tfName);
-        form.add(Box.createVerticalStrut(20));
-        form.add(createLabel("Wybierz ikonę:"));
-        form.add(Box.createVerticalStrut(8));
-        form.add(iconPanel);
-        form.add(Box.createVerticalGlue());
-
-        JButton btnSave = new JButton(trybEdycji ? "ZAPISZ ZMIANY" : "UTWÓRZ");
-        styleButton(btnSave, ACCENT);
-        btnSave.setAlignmentX(Component.CENTER_ALIGNMENT);
-
+        form.add(createLabel("Nazwa portfela:")); form.add(Box.createVerticalStrut(8)); form.add(tfName); form.add(Box.createVerticalStrut(20)); form.add(createLabel("Typ Portfela:")); form.add(Box.createVerticalStrut(8)); form.add(iconPanel); form.add(Box.createVerticalGlue());
+        JButton btnSave = new JButton(trybEdycji ? "ZAPISZ ZMIANY" : "UTWÓRZ"); styleButton(btnSave, ACCENT); btnSave.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnSave.addActionListener(e -> {
             String n = tfName.getText().trim().replaceAll("[^a-zA-Z0-9żźćńółęśąŻŹĆŃÓŁĘŚĄ _-]", "");
-            if(!n.isEmpty()) {
-                if (trybEdycji) {
-                    if (!n.equals(staraNazwa)) BazaDanych.zmienNazwePortfela(staraNazwa, n);
-                } else {
-                    BazaDanych.utworzPortfel(n);
-                }
-                BazaDanych.ustawIkone(n, selectedIconTemp);
-                odswiezDashboard();
-                d.dispose();
-            }
+            if(!n.isEmpty()) { if (trybEdycji) { if (!n.equals(staraNazwa)) BazaDanych.zmienNazwePortfela(staraNazwa, n); } else { BazaDanych.utworzPortfel(n); } BazaDanych.ustawIkone(n, selectedIconTemp); odswiezDashboard(); d.dispose(); }
         });
-
-        JPanel footer = new JPanel();
-        footer.setBackground(CARD_BG);
-        footer.setBorder(new EmptyBorder(0,0,20,0));
-        footer.add(btnSave);
-
-        root.add(form, BorderLayout.CENTER);
-        root.add(footer, BorderLayout.SOUTH);
-        d.setVisible(true);
+        JPanel footer = new JPanel(); footer.setBackground(CARD_BG); footer.setBorder(new EmptyBorder(0,0,20,0)); footer.add(btnSave); root.add(form, BorderLayout.CENTER); root.add(footer, BorderLayout.SOUTH); d.setVisible(true);
     }
-
-    public static ImageIcon loadIcon(String name, int size) {
-        try {
-            URL url = PortfolioManager.class.getResource("/icons/" + name);
-            if (url == null) url = PortfolioManager.class.getResource("/icons/wallet.png");
-            if (url == null) return null;
-            return new ImageIcon(new ImageIcon(url).getImage().getScaledInstance(size, size, Image.SCALE_SMOOTH));
-        } catch (Exception e) { return null; }
-    }
-    public static void stylizujInput(JTextField tf) {
-        tf.setOpaque(true); tf.setBackground(INPUT_BG); tf.setForeground(TEXT_MAIN); tf.setCaretColor(TEXT_MAIN);
-        tf.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER_COLOR), new EmptyBorder(5,10,5,10)));
-        tf.setFont(FONT_NORMAL); tf.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40)); tf.setPreferredSize(new Dimension(300, 40));
-    }
+    public static ImageIcon loadIcon(String name, int size) { try { URL url = PortfolioManager.class.getResource("/icons/" + name); if (url == null) url = PortfolioManager.class.getResource("/icons/wallet.png"); if (url == null) return null; return new ImageIcon(new ImageIcon(url).getImage().getScaledInstance(size, size, Image.SCALE_SMOOTH)); } catch (Exception e) { return null; } }
+    public static void stylizujInput(JTextField tf) { tf.setOpaque(true); tf.setBackground(INPUT_BG); tf.setForeground(TEXT_MAIN); tf.setCaretColor(TEXT_MAIN); tf.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER_COLOR), new EmptyBorder(5,10,5,10))); tf.setFont(FONT_NORMAL); tf.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40)); tf.setPreferredSize(new Dimension(300, 40)); }
     public static void styleButton(JButton b, Color bg) { b.setUI(new BasicButtonUI()); b.setBackground(bg); b.setForeground(Color.WHITE); b.setFocusPainted(false); b.setBorderPainted(false); b.setFont(new Font("Segoe UI", Font.BOLD, 14)); b.setBorder(new EmptyBorder(10, 30, 10, 30)); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); }
     public static void styleMiniActionBtn(JButton b, Color col) { b.setUI(new BasicButtonUI()); b.setBorder(null); b.setContentAreaFilled(false); b.setFocusPainted(false); b.setForeground(col); b.setFont(new Font("Segoe UI Symbol", Font.BOLD, 16)); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setForeground(col.brighter()); } public void mouseExited(MouseEvent e) { b.setForeground(col); } }); }
     public static void stylePopupMenu(JPopupMenu p) { p.setBackground(CARD_BG); p.setBorder(BorderFactory.createLineBorder(BORDER_COLOR)); }
@@ -480,131 +377,24 @@ public class PortfolioManager extends JFrame {
     public static void styleScrollPane(JScrollPane sp) { sp.getVerticalScrollBar().setPreferredSize(new Dimension(8, 0)); sp.getVerticalScrollBar().setUI(new BasicScrollBarUI() { @Override protected void configureScrollBarColors() { this.thumbColor = BORDER_COLOR; this.trackColor = BG_COLOR; } @Override protected JButton createDecreaseButton(int orientation) { return createZeroButton(); } @Override protected JButton createIncreaseButton(int orientation) { return createZeroButton(); } }); }
     private static JButton createZeroButton() { JButton b=new JButton(); b.setPreferredSize(new Dimension(0,0)); return b; }
     private JButton createWinButton(String t, boolean red) { JButton b = new JButton(t); b.setUI(new BasicButtonUI()); b.setBorder(null); b.setBackground(BG_COLOR); b.setForeground(TEXT_MAIN); b.setPreferredSize(new Dimension(45, 30)); b.setFocusPainted(false); b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setBackground(red ? ACCENT_RED : CARD_HOVER); } public void mouseExited(MouseEvent e) { b.setBackground(BG_COLOR); } }); return b; }
-
     private JLabel createLabel(String txt) { JLabel l = new JLabel(txt); l.setForeground(TEXT_DIM); l.setAlignmentX(Component.CENTER_ALIGNMENT); return l; }
-
     public static void stylizujComboBox(JComboBox<?> combo) {
-        combo.setFont(FONT_NORMAL);
-        combo.setBackground(INPUT_BG);
-        combo.setForeground(TEXT_MAIN);
-        combo.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
-        combo.setOpaque(true);
-
+        combo.setFont(FONT_NORMAL); combo.setBackground(INPUT_BG); combo.setForeground(TEXT_MAIN); combo.setBorder(BorderFactory.createLineBorder(BORDER_COLOR)); combo.setOpaque(true);
         combo.setUI(new BasicComboBoxUI() {
-            @Override
-            protected JButton createArrowButton() {
-                JButton btn = new JButton("▼");
-                btn.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
-                btn.setFocusPainted(false);
-                btn.setContentAreaFilled(false);
-                btn.setForeground(TEXT_DIM);
-                return btn;
-            }
-
-            @Override
-            public void paintCurrentValue(Graphics g, Rectangle bounds, boolean hasFocus) {
-                ListCellRenderer renderer = comboBox.getRenderer();
-                Component c;
-
-                if (hasFocus && !isPopupVisible(comboBox)) {
-                    c = renderer.getListCellRendererComponent(listBox, comboBox.getSelectedItem(), -1, true, false);
-                } else {
-                    c = renderer.getListCellRendererComponent(listBox, comboBox.getSelectedItem(), -1, false, false);
-                }
-
-                c.setFont(comboBox.getFont());
-
-                if (!comboBox.isEnabled()) {
-                    c.setForeground(TEXT_DIM);
-                    c.setBackground(INPUT_BG);
-                } else {
-                    c.setForeground(TEXT_MAIN);
-                    c.setBackground(INPUT_BG);
-                }
-
-                if (c instanceof JComponent) {
-                    ((JComponent) c).setOpaque(true);
-                }
-
-                boolean shouldValidate = (c instanceof JPanel);
-                currentValuePane.paintComponent(g, c, comboBox, bounds.x, bounds.y, bounds.width, bounds.height, shouldValidate);
-            }
-
-            @Override
-            public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) {
-                g.setColor(INPUT_BG);
-                g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
-            }
+            @Override protected JButton createArrowButton() { JButton btn = new JButton("▼"); btn.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5)); btn.setFocusPainted(false); btn.setContentAreaFilled(false); btn.setForeground(TEXT_DIM); return btn; }
+            @Override public void paintCurrentValue(Graphics g, Rectangle bounds, boolean hasFocus) { ListCellRenderer renderer = comboBox.getRenderer(); Component c; if (hasFocus && !isPopupVisible(comboBox)) { c = renderer.getListCellRendererComponent(listBox, comboBox.getSelectedItem(), -1, true, false); } else { c = renderer.getListCellRendererComponent(listBox, comboBox.getSelectedItem(), -1, false, false); } c.setFont(comboBox.getFont()); if (!comboBox.isEnabled()) { c.setForeground(TEXT_DIM); c.setBackground(INPUT_BG); } else { c.setForeground(TEXT_MAIN); c.setBackground(INPUT_BG); } if (c instanceof JComponent) { ((JComponent) c).setOpaque(true); } boolean shouldValidate = (c instanceof JPanel); currentValuePane.paintComponent(g, c, comboBox, bounds.x, bounds.y, bounds.width, bounds.height, shouldValidate); }
+            @Override public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) { g.setColor(INPUT_BG); g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height); }
         });
-
-        combo.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                JLabel c = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                c.setBorder(new EmptyBorder(6, 8, 6, 8));
-
-                if (isSelected && index != -1) {
-                    c.setBackground(ACCENT);
-                    c.setForeground(Color.WHITE);
-                } else {
-                    c.setBackground(INPUT_BG);
-                    c.setForeground(TEXT_MAIN);
-                }
-                return c;
-            }
-        });
+        combo.setRenderer(new DefaultListCellRenderer() { @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) { JLabel c = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus); c.setBorder(new EmptyBorder(6, 8, 6, 8)); if (isSelected && index != -1) { c.setBackground(ACCENT); c.setForeground(Color.WHITE); } else { c.setBackground(INPUT_BG); c.setForeground(TEXT_MAIN); } return c; } });
     }
-
     public static void stylizujSpinner(JSpinner spinner) {
-        spinner.setFont(FONT_NORMAL);
-        spinner.setBackground(INPUT_BG);
-        spinner.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
-
-        JComponent editor = spinner.getEditor();
-        if (editor instanceof JSpinner.DefaultEditor) {
-            JTextField tf = ((JSpinner.DefaultEditor) editor).getTextField();
-            tf.setBackground(INPUT_BG);
-            tf.setForeground(TEXT_MAIN);
-            tf.setCaretColor(TEXT_MAIN);
-            tf.setBorder(new EmptyBorder(0, 5, 0, 0));
-            tf.setHorizontalAlignment(JTextField.LEFT);
-        }
-
+        spinner.setFont(FONT_NORMAL); spinner.setBackground(INPUT_BG); spinner.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
+        JComponent editor = spinner.getEditor(); if (editor instanceof JSpinner.DefaultEditor) { JTextField tf = ((JSpinner.DefaultEditor) editor).getTextField(); tf.setBackground(INPUT_BG); tf.setForeground(TEXT_MAIN); tf.setCaretColor(TEXT_MAIN); tf.setBorder(new EmptyBorder(0, 5, 0, 0)); tf.setHorizontalAlignment(JTextField.LEFT); }
         spinner.setUI(new javax.swing.plaf.basic.BasicSpinnerUI() {
-            @Override protected Component createNextButton() { return createArrowButton("▲", 1); }
-            @Override protected Component createPreviousButton() { return createArrowButton("▼", -1); }
-
-            private JButton createArrowButton(String txt, int direction) {
-                JButton b = new JButton(txt);
-                b.setBorder(null); b.setFocusPainted(false); b.setContentAreaFilled(false);
-                b.setForeground(TEXT_DIM); b.setBackground(INPUT_BG);
-                b.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 10));
-                b.setPreferredSize(new Dimension(20, 10));
-
-                b.addMouseListener(new MouseAdapter() {
-                    public void mouseEntered(MouseEvent e) { b.setForeground(Color.WHITE); }
-                    public void mouseExited(MouseEvent e) { b.setForeground(TEXT_DIM); }
-                });
-
-                b.addActionListener(e -> {
-                    try {
-                        Object val = (direction > 0) ? spinner.getNextValue() : spinner.getPreviousValue();
-                        if (val != null) spinner.setValue(val);
-                    } catch (Exception ignored) {}
-                });
-
-                return b;
-            }
-        });
-        spinner.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+            @Override protected Component createNextButton() { return createArrowButton("▲", 1); } @Override protected Component createPreviousButton() { return createArrowButton("▼", -1); }
+            private JButton createArrowButton(String txt, int direction) { JButton b = new JButton(txt); b.setBorder(null); b.setFocusPainted(false); b.setContentAreaFilled(false); b.setForeground(TEXT_DIM); b.setBackground(INPUT_BG); b.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 10)); b.setPreferredSize(new Dimension(20, 10)); b.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { b.setForeground(Color.WHITE); } public void mouseExited(MouseEvent e) { b.setForeground(TEXT_DIM); } }); b.addActionListener(e -> { try { Object val = (direction > 0) ? spinner.getNextValue() : spinner.getPreviousValue(); if (val != null) spinner.setValue(val); } catch (Exception ignored) {} }); return b; }
+        }); spinner.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
     }
-
-    private void otworzPortfel(String nazwa) {
-        if (portfolioView != null) mainContainer.remove(portfolioView);
-        portfolioView = new Main(nazwa, this);
-        mainContainer.add(portfolioView, "PORTFOLIO");
-        cardLayout.show(mainContainer, "PORTFOLIO");
-    }
+    private void otworzPortfel(String nazwa) { if (portfolioView != null) mainContainer.remove(portfolioView); portfolioView = new Main(nazwa, this); mainContainer.add(portfolioView, "PORTFOLIO"); cardLayout.show(mainContainer, "PORTFOLIO"); }
     public void wrocDoDashboard() { cardLayout.show(mainContainer, "DASHBOARD"); odswiezDashboard(); }
-
 }

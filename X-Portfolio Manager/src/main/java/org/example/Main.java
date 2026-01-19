@@ -13,6 +13,7 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.dnd.*;
 import java.awt.event.*;
 import java.io.File;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -47,9 +48,18 @@ public class Main extends JPanel {
 
     private double currentUSD, currentEUR, currentGBP;
 
+    private enum ViewType { STOCKS, CRYPTO, BONDS, MIXED }
+    private ViewType currentViewType = ViewType.MIXED;
+
     public Main(String nazwaPortfela, PortfolioManager manager) {
         this.nazwaPortfela = nazwaPortfela;
         this.parentManager = manager;
+
+        String icon = BazaDanych.pobierzIkone(nazwaPortfela);
+        if (icon.contains("stock")) currentViewType = ViewType.STOCKS;
+        else if (icon.contains("crypto")) currentViewType = ViewType.CRYPTO;
+        else if (icon.contains("bond")) currentViewType = ViewType.BONDS;
+        else currentViewType = ViewType.MIXED;
 
         int iconSize = 12;
         this.iconArrowRight  = PortfolioManager.loadIcon("arrow_right.png", iconSize);
@@ -115,6 +125,10 @@ public class Main extends JPanel {
         JButton btnImp = new JButton("IMPORT DANE");
         styleMinimalistButton(btnImp);
         btnImp.addActionListener(e -> pokazOknoImportu());
+        // Wyłączenie przycisku importu dla Obligacji
+        if (currentViewType == ViewType.BONDS) {
+            btnImp.setVisible(false);
+        }
 
         JButton btnReset = new JButton("RESETUJ");
         styleMinimalistButton(btnReset);
@@ -133,7 +147,16 @@ public class Main extends JPanel {
         header.add(toolbar, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
 
-        String[] cols = {"Symbol", "Typ", "Data / Ilość Poz.", "Ilość", "Śr. Cena / Cena", "Cena Rynkowa", "Wartość (PLN)"};
+        // --- DEFINIOWANIE KOLUMN W ZALEŻNOŚCI OD TYPU ---
+        String[] cols;
+        if (currentViewType == ViewType.BONDS) {
+            cols = new String[]{"Seria", "Rodzaj", "Data Wykupu", "Ilość", "Nominał (100)", "Oprocentowanie", "Marża", "Wartość (PLN)"};
+        } else if (currentViewType == ViewType.STOCKS || currentViewType == ViewType.CRYPTO) {
+            cols = new String[]{"Symbol", "Rynek", "Data Zakupu", "Ilość", "Cena Zakupu", "Kurs Aktualny", "Wartość (PLN)"};
+        } else {
+            cols = new String[]{"Symbol", "Typ", "Data / Ilość Poz.", "Ilość", "Śr. Cena / Cena", "Cena Rynkowa", "Wartość (PLN)"};
+        }
+
         modelTabeli = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -222,7 +245,7 @@ public class Main extends JPanel {
         pasekPostepu = new JProgressBar();
         pasekPostepu.setIndeterminate(false);
         pasekPostepu.setStringPainted(false);
-        pasekPostepu.setPreferredSize(new Dimension(150, 4));
+        pasekPostepu.setPreferredSize(new Dimension(150, 1));
         pasekPostepu.setBackground(CARD_BG);
         pasekPostepu.setForeground(ACCENT);
         pasekPostepu.setBorderPainted(false);
@@ -265,14 +288,14 @@ public class Main extends JPanel {
 
         przeliczWidok();
 
-        // Automatyczne odświeżenie przy starcie
         if (!MarketData.czyDaneZCache()) odswiezCeny();
         else labelStatus.setText(" Ostatnia aktualizacja: " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
     }
 
     private void zresetujPortfel() {
-        int confirm = JOptionPane.showConfirmDialog(this, "Czy na pewno chcesz wyzerować ten portfel?", "Potwierdź Reset", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
+        // --- CUSTOMOWY DIALOG ---
+        int confirm = PortfolioManager.showCustomConfirmDialog(this, "Czy na pewno chcesz wyzerować ten portfel?", "Potwierdź Reset");
+        if (confirm == PortfolioManager.YES_OPTION) {
             portfel.clear();
             historiaTransakcji.clear();
             BazaDanych.zapisz(nazwaPortfela, portfel);
@@ -281,7 +304,6 @@ public class Main extends JPanel {
         }
     }
 
-    // --- WIELOWĄTKOWE POBIERANIE CEN ---
     private void odswiezCeny() {
         przyciskOdswiez.setEnabled(false);
         przyciskOdswiez.setBackground(BORDER_COLOR);
@@ -300,7 +322,6 @@ public class Main extends JPanel {
                 if (e == 0) e = currentEUR;
                 if (g == 0) g = currentGBP;
 
-                // Pula 6 wątków - szybciej, ale bezpiecznie dla API
                 java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(6);
                 int total = portfel.size();
                 java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
@@ -308,7 +329,7 @@ public class Main extends JPanel {
                 for (Aktywo a : portfel) {
                     if (a instanceof AktywoRynkowe) {
                         executor.submit(() -> {
-                            a.getCenaJednostkowa(); // Wymusza pobranie
+                            a.getCenaJednostkowa();
                             publish(counter.incrementAndGet() * 100 / (total > 0 ? total : 1));
                         });
                     } else {
@@ -351,6 +372,7 @@ public class Main extends JPanel {
         List<String> klucze = new ArrayList<>(grupy.keySet());
         Collections.sort(klucze);
         int r = 0;
+
         for (String sym : klucze) {
             List<Aktywo> lista = grupy.get(sym);
             if (lista.size() == 1) {
@@ -368,7 +390,22 @@ public class Main extends JPanel {
                 }
                 double srCena = ilosc > 0 ? koszt / ilosc : 0;
                 double cenaRynk = lista.get(0).getCenaJednostkowa();
-                modelTabeli.addRow(new Object[]{ sym, lista.get(0).typ, lista.size() + " poz.", String.format("%.4f", ilosc), srCena > 0 ? String.format("Śr: %.2f", srCena) : "-", String.format("%.2f", cenaRynk), String.format("%,.2f zł", wartosc) });
+
+                if (currentViewType == ViewType.BONDS) {
+                    String oprocentowanie = "Seria";
+                    modelTabeli.addRow(new Object[]{ sym, "Grupowe", "-", String.format("%.0f", ilosc), "100.00", oprocentowanie, "-", String.format("%,.2f zł", wartosc) });
+                }
+                else if (currentViewType == ViewType.STOCKS || currentViewType == ViewType.CRYPTO) {
+                    String typWyswietlania = lista.get(0).typ.toString();
+                    // Łatka na EUR w krypto
+                    if(sym.equals("EUR") || sym.equals("USD") || sym.equals("PLN")) typWyswietlania = "FIAT";
+
+                    modelTabeli.addRow(new Object[]{ sym, typWyswietlania, "-", String.format("%.4f", ilosc), srCena > 0 ? String.format("Śr: %.2f", srCena) : "-", String.format("%.2f", cenaRynk), String.format("%,.2f zł", wartosc) });
+                }
+                else {
+                    modelTabeli.addRow(new Object[]{ sym, lista.get(0).typ, lista.size() + " poz.", String.format("%.4f", ilosc), srCena > 0 ? String.format("Śr: %.2f", srCena) : "-", String.format("%.2f", cenaRynk), String.format("%,.2f zł", wartosc) });
+                }
+
                 mapaWierszyDoAktywow.put(r++, null);
                 if (rozwinieteGrupy.contains(sym)) { for (Aktywo a : lista) dodajWiersz(a, r++, true); }
             }
@@ -391,9 +428,75 @@ public class Main extends JPanel {
     private void dodajWiersz(Aktywo a, int row, boolean wciecie) {
         double w = a.getWartoscPLN(currentUSD, currentEUR, currentGBP);
         String zak = a.getCenaZakupu() > 0 ? String.format("%.2f", a.getCenaZakupu()) : "-";
+
+        // --- POPRAWKA CENY ZAKUPU DLA KRYPTO ---
+        if (currentViewType == ViewType.CRYPTO) {
+            if (a instanceof AktywoRynkowe) {
+                double cenaZak = ((AktywoRynkowe) a).cenaZakupu;
+                if (cenaZak > 0) {
+                    zak = String.format("%.2f", cenaZak);
+                } else {
+                    zak = "-";
+                }
+            }
+        }
+
         String sym = wciecie ? "      " + a.dataZakupu : a.symbol;
-        if (wciecie) modelTabeli.addRow(new Object[]{ sym, "", "Zakup: " + a.dataZakupu, a.ilosc, zak, "", String.format("%,.2f zł", w) });
-        else modelTabeli.addRow(new Object[]{ a.symbol, a.typ, a.dataZakupu, a.ilosc, zak, String.format("%.2f", a.getCenaJednostkowa()), String.format("%,.2f zł", w) });
+
+        if (currentViewType == ViewType.BONDS) {
+            String nom = "100.00";
+            String opr = "-";
+            String typ = "";
+            String dataWykupu = "Brak danych";
+            String marza = "-";
+
+            if (a instanceof ObligacjaSkarbowa) {
+                ObligacjaSkarbowa os = (ObligacjaSkarbowa) a;
+                opr = String.format("%.2f%%", os.getAktualneOprocentowanie());
+                typ = (os.typ == TypAktywa.OBLIGACJA_INDEKSOWANA) ? "Indeksowana" : "Stała";
+
+                try {
+                    SeriesDefinition def = SeriesRepository.getDefinition(os.symbol);
+                    if (def != null) {
+                        if (def.maturityDate != null) dataWykupu = def.maturityDate.toString();
+                        if (def.margin != null && os.typ == TypAktywa.OBLIGACJA_INDEKSOWANA) {
+                            marza = String.format("%.2f%%", def.margin);
+                        }
+                    }
+                } catch(Exception ignored) {}
+            }
+
+            modelTabeli.addRow(new Object[]{
+                    sym,
+                    typ,
+                    dataWykupu,
+                    String.format("%.0f", a.ilosc),
+                    nom,
+                    opr,
+                    marza,
+                    String.format("%,.2f zł", w)
+            });
+
+        } else if (currentViewType == ViewType.STOCKS || currentViewType == ViewType.CRYPTO) {
+            String cenaRynkowa = String.format("%.2f", a.getCenaJednostkowa());
+            String displayType = a.typ.toString();
+            if(a.symbol.equals("EUR") || a.symbol.equals("PLN") || a.symbol.equals("USD")) displayType = "FIAT";
+
+            modelTabeli.addRow(new Object[]{
+                    sym,
+                    displayType,
+                    a.dataZakupu,
+                    String.format("%.4f", a.ilosc),
+                    zak,
+                    cenaRynkowa,
+                    String.format("%,.2f zł", w)
+            });
+
+        } else {
+            if (wciecie) modelTabeli.addRow(new Object[]{ sym, "", "Zakup: " + a.dataZakupu, a.ilosc, zak, "", String.format("%,.2f zł", w) });
+            else modelTabeli.addRow(new Object[]{ a.symbol, a.typ, a.dataZakupu, a.ilosc, zak, String.format("%.2f", a.getCenaJednostkowa()), String.format("%,.2f zł", w) });
+        }
+
         mapaWierszyDoAktywow.put(row, a);
     }
 
@@ -423,10 +526,14 @@ public class Main extends JPanel {
         }
     }
 
-    // --- METODY UI (BEZ ZMIAN) ---
     private void usunZaznaczone() {
         int[] rows = tabela.getSelectedRows();
         if (rows.length == 0) return;
+
+        // --- CUSTOMOWE POTWIERDZENIE ---
+        int c = PortfolioManager.showCustomConfirmDialog(this, "Usunąć zaznaczone pozycje (" + rows.length + ")?", "Potwierdź Usunięcie");
+        if (c != PortfolioManager.YES_OPTION) return;
+
         Set<Aktywo> del = new HashSet<>();
         for (int r : rows) {
             Aktywo a = mapaWierszyDoAktywow.get(r);
@@ -453,7 +560,20 @@ public class Main extends JPanel {
         head.add(title, BorderLayout.WEST); head.add(close, BorderLayout.EAST); root.add(head, BorderLayout.NORTH);
         JPanel content = new JPanel(); content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS)); content.setBackground(CARD_BG); content.setBorder(new EmptyBorder(10, 30, 20, 30));
         JLabel lSource = new JLabel("Źródło danych:"); lSource.setForeground(TEXT_DIM); lSource.setAlignmentX(Component.CENTER_ALIGNMENT);
-        JComboBox<String> comboSource = new JComboBox<>(new String[]{"Binance (CSV)", "XTB (Excel/CSV)"}); PortfolioManager.stylizujComboBox(comboSource);
+
+        JComboBox<String> comboSource = new JComboBox<>(new String[]{"Binance (CSV)", "XTB (Excel/CSV)"});
+        PortfolioManager.stylizujComboBox(comboSource);
+
+        if (currentViewType == ViewType.STOCKS) {
+            comboSource.setSelectedIndex(1);
+            comboSource.setEnabled(false);
+        } else if (currentViewType == ViewType.CRYPTO) {
+            comboSource.setSelectedIndex(0);
+            comboSource.setEnabled(false);
+        } else if (currentViewType == ViewType.BONDS) {
+            comboSource.setEnabled(false);
+        }
+
         JPanel dropZone = new JPanel(new GridBagLayout()); dropZone.setBackground(INPUT_BG);
         dropZone.setBorder(BorderFactory.createCompoundBorder(new EmptyBorder(10, 30, 10, 30), BorderFactory.createDashedBorder(TEXT_DIM, 2, 5, 5, true)));
         dropZone.setPreferredSize(new Dimension(400, 150)); dropZone.setMaximumSize(new Dimension(Integer.MAX_VALUE, 150));
@@ -481,8 +601,16 @@ public class Main extends JPanel {
         for (File f : pliki) {
             String nazwa = f.getName().toLowerCase();
             XtbImport.ImportResult res = null;
-            if (nazwa.endsWith(".csv")) { res = BinanceImport.importujCSV(f); raport.append("Binance: "); }
-            else if (nazwa.endsWith(".xlsx") || nazwa.endsWith(".xls")) { res = XtbImport.importujPliki(Collections.singletonList(f)); raport.append("XTB: "); }
+
+            if (currentViewType == ViewType.CRYPTO) {
+                res = BinanceImport.importujCSV(f); raport.append("Binance: ");
+            } else if (currentViewType == ViewType.STOCKS) {
+                res = XtbImport.importujPliki(Collections.singletonList(f)); raport.append("XTB: ");
+            } else {
+                if (nazwa.endsWith(".csv")) { res = BinanceImport.importujCSV(f); raport.append("Binance: "); }
+                else if (nazwa.endsWith(".xlsx") || nazwa.endsWith(".xls")) { res = XtbImport.importujPliki(Collections.singletonList(f)); raport.append("XTB: "); }
+            }
+
             if (res != null) {
                 if (!res.aktywa.isEmpty()) { portfel.addAll(res.aktywa); zaimportowanoAktywa += res.aktywa.size(); raport.append(res.aktywa.size()).append(" poz. "); }
                 if (!res.historiaTransakcji.isEmpty()) { historiaTransakcji.addAll(res.historiaTransakcji); zaimportowanoHistorie += res.historiaTransakcji.size(); raport.append(res.historiaTransakcji.size()).append(" oper. "); }
@@ -493,13 +621,15 @@ public class Main extends JPanel {
             BazaDanych.zapisz(nazwaPortfela, portfel);
             BazaDanych.zapiszHistorie(nazwaPortfela, historiaTransakcji);
             przeliczWidok();
-            JOptionPane.showMessageDialog(d, "Import zakończony!\n" + raport.toString());
+            // --- CUSTOMOWY DIALOG ---
+            PortfolioManager.showCustomMessageDialog(d, "Import zakończony!\n" + raport.toString(), "Sukces");
             d.dispose();
         } else {
-            JOptionPane.showMessageDialog(d, "Nie rozpoznano danych.");
+            PortfolioManager.showCustomMessageDialog(d, "Nie rozpoznano danych lub format niezgodny z typem portfela.", "Błąd");
         }
     }
 
+    // Reszta metod (pokazOknoDodawania itd.) pozostaje bez zmian, bo korzystają z JDialog, które są już stylowane
     private void pokazOknoDodawania() {
         Window parent = SwingUtilities.getWindowAncestor(this);
         JDialog d = new JDialog(parent, "Nowa Pozycja", Dialog.ModalityType.APPLICATION_MODAL);
@@ -623,9 +753,25 @@ public class Main extends JPanel {
             d.revalidate(); d.repaint();
         };
 
-        bAkcja.addActionListener(updateLogic); bKrypto.addActionListener(updateLogic); bOblig.addActionListener(updateLogic); updateLogic.actionPerformed(null);
+        bAkcja.addActionListener(updateLogic); bKrypto.addActionListener(updateLogic); bOblig.addActionListener(updateLogic);
 
-        form.add(createLabel("Kategoria:")); form.add(Box.createVerticalStrut(5)); form.add(catPanel); form.add(Box.createVerticalStrut(15));
+        if (currentViewType == ViewType.STOCKS) {
+            bAkcja.setSelected(true);
+            catPanel.setVisible(false);
+        } else if (currentViewType == ViewType.CRYPTO) {
+            bKrypto.setSelected(true);
+            catPanel.setVisible(false);
+        } else if (currentViewType == ViewType.BONDS) {
+            bOblig.setSelected(true);
+            catPanel.setVisible(false);
+        }
+
+        updateLogic.actionPerformed(null);
+
+        if (currentViewType == ViewType.MIXED) {
+            form.add(createLabel("Kategoria:")); form.add(Box.createVerticalStrut(5)); form.add(catPanel); form.add(Box.createVerticalStrut(15));
+        }
+
         form.add(createLabel("Rynek / Typ:")); form.add(Box.createVerticalStrut(5)); form.add(sub); form.add(Box.createVerticalStrut(10));
         form.add(lblSymbol); form.add(Box.createVerticalStrut(5)); form.add(sym); form.add(Box.createVerticalStrut(10));
 
@@ -689,7 +835,8 @@ public class Main extends JPanel {
                     d.dispose();
                 }
             } catch(Exception ex) {
-                JOptionPane.showMessageDialog(d, "Błąd danych: " + ex.getMessage());
+                // --- CUSTOMOWY ERROR ---
+                PortfolioManager.showCustomMessageDialog(d, "Błąd danych: " + ex.getMessage(), "Błąd");
             }
         });
 
@@ -746,6 +893,7 @@ public class Main extends JPanel {
                     String sym = (String) v;
                     boolean preciseHover = (r == hoveredRow && isArrowHovered);
                     boolean showWhite = preciseHover || isSel;
+
                     if (rozwinieteGrupy.contains(sym)) l.setIcon(showWhite ? iconArrowDownW : iconArrowDown);
                     else l.setIcon(showWhite ? iconArrowRightW : iconArrowRight);
                 }
